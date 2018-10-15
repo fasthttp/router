@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -71,7 +71,7 @@ func main() {
 	user := "gordon"
 	pass := "secret!"
 
-	router := fasthttprouter.New()
+	router := router.New()
 	router.GET("/", Index)
 	router.GET("/protected/", BasicAuth(Protected, user, pass))
 

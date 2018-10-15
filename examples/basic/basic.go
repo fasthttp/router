@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -32,7 +32,7 @@ func QueryArgs(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
-	router := fasthttprouter.New()
+	router := router.New()
 	router.GET("/", Index)
 	router.GET("/hello/:name", Hello)
 	router.GET("/multi/:name/:word", MultiParams)

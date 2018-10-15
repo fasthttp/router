@@ -1,6 +1,6 @@
 # Example of FastHttpRouter
 
-These examples show you the usage of `fasthttprouter`. You can easily build a web application with it. Or you can make your own midwares such as custom logger, metrics, or any one you want.
+These examples show you the usage of `router`. You can easily build a web application with it. Or you can make your own midwares such as custom logger, metrics, or any one you want.
 
 ### Multi-domain / Sub-domains
 
@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -48,7 +48,7 @@ func (hs HostSwitch) CheckHost(ctx *fasthttp.RequestCtx) {
 
 func main() {
 	// Initialize a router as usual
-	router := fasthttprouter.New()
+	router := router.New()
 	router.GET("/", Index)
 	router.GET("/hello/:name", Hello)
 

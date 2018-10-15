@@ -1,10 +1,10 @@
 # Example of FastHttpRouter
 
-These examples show you the usage of `fasthttprouter`. You can easily build a web application with it. Or you can make your own midwares such as custom logger, metrics, or any one you want.
+These examples show you the usage of `router`. You can easily build a web application with it. Or you can make your own midwares such as custom logger, metrics, or any one you want.
 
 ### Basic example
 
-This is just a quick introduction, view the [GoDoc](http://godoc.org/github.com/buaazp/fasthttprouter) for details.
+This is just a quick introduction, view the [GoDoc](http://godoc.org/github.com/fasthttp/router) for details.
 
 Let's start with a trivial example:
 
@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -43,7 +43,7 @@ func QueryArgs(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
-	router := fasthttprouter.New()
+	router := router.New()
 	router.GET("/", Index)
 	router.GET("/hello/:name", Hello)
 	router.GET("/multi/:name/:word", MultiParams)

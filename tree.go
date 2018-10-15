@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-package fasthttprouter
+package router
 
 import (
-	"github.com/valyala/fasthttp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/valyala/fasthttp"
 )
 
 func min(a, b int) int {

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-// Package fasthttprouter is a trie based high performance HTTP request router.
+// Package router is a trie based high performance HTTP request router.
 //
 // A trivial example is:
 //
@@ -12,7 +12,7 @@
 //     "fmt"
 //     "log"
 //
-//     "github.com/buaazp/fasthttprouter"
+//     "github.com/fasthttp/router"
 //     "github.com/valyala/fasthttp"
 // )
 
@@ -25,7 +25,7 @@
 // }
 
 // func main() {
-//     router := fasthttprouter.New()
+//     router := router.New()
 //     router.GET("/", Index)
 //     router.GET("/hello/:name", Hello)
 
@@ -71,7 +71,7 @@
 //  user := ps.UserValue("user")
 //
 
-package fasthttprouter
+package router
 
 import (
 	"strings"
@@ -314,11 +314,11 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 				} else {
 					uri = path + "/"
 				}
-				
+
 				if len(ctx.URI().QueryString()) > 0 {
 					uri += "?" + string(ctx.QueryArgs().QueryString())
 				}
-				
+
 				ctx.Redirect(uri, code)
 				return
 			}

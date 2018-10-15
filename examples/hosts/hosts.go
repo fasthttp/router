@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -37,7 +37,7 @@ func (hs HostSwitch) CheckHost(ctx *fasthttp.RequestCtx) {
 
 func main() {
 	// Initialize a router as usual
-	router := fasthttprouter.New()
+	router := router.New()
 	router.GET("/", Index)
 	router.GET("/hello/:name", Hello)
 
