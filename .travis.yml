@@ -24,4 +24,4 @@ script:
     # run tests with the race detector
   - go test -v -race
 
-  - $GOPATH/bin/goveralls -v -service=travis-ci
+  - $GOPATH/bin/goveralls -v -service=travis-ci -package github.com/fasthttp/router
