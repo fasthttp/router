@@ -1,26 +1,27 @@
-sudo: false
 language: go
-
+sudo: false
 go:
   - 1.9.x
   - 1.10.x
   - 1.11.x
   - tip
 
-before_install:
-  - go get -v github.com/axw/gocov/gocov
-  - go get -v github.com/mattn/goveralls
-  # - go get -v github.com/golang/lint/golint
+os:
+  - linux
+  - osx
 
-install:
-  - go get -d -t -v ./...
-  - go install -v
+before_install:
+  - go get -u -v github.com/mattn/goveralls
 
 script:
-  - go vet ./...
-  # - $HOME/gopath/bin/golint ./...
-  - go test -v -covermode=count -coverprofile=coverage.out
-  - $HOME/gopath/bin/goveralls -coverprofile=coverage.out -service=travis-ci
+   # build test for supported platforms
+  - GOOS=linux go build
+  - GOOS=darwin go build
+  - GOOS=freebsd go build
+  - GOOS=windows go build
+  - GOARCH=386 go build
 
--after_success:
-  - coveralls
+    # run tests with the race detector
+  - go test -v -race
+
+  - $GOPATH/bin/goveralls -v -service=travis-ci
