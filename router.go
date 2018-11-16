@@ -76,6 +76,7 @@ package router
 import (
 	"strings"
 
+	"github.com/savsgio/gotils"
 	"github.com/valyala/fasthttp"
 )
 
@@ -293,8 +294,9 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		defer r.recv(ctx)
 	}
 
-	path := string(ctx.Path())
-	method := string(ctx.Method())
+	path := gotils.B2S(ctx.Path())
+	method := gotils.B2S(ctx.Method())
+
 	if root := r.trees[method]; root != nil {
 		if f, tsr := root.getValue(path, ctx); f != nil {
 			f(ctx)
@@ -336,8 +338,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 						fixedPath = append(fixedPath, questionMark...)
 						fixedPath = append(fixedPath, queryBuf...)
 					}
-					uri := string(fixedPath)
-					ctx.Redirect(uri, code)
+					ctx.RedirectBytes(fixedPath, code)
 					return
 				}
 			}
@@ -373,7 +374,6 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	if r.NotFound != nil {
 		r.NotFound(ctx)
 	} else {
-		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound),
-			fasthttp.StatusNotFound)
+		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound), fasthttp.StatusNotFound)
 	}
 }

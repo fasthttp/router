@@ -908,3 +908,23 @@ func (rw *readWriter) SetReadDeadline(t time.Time) error {
 func (rw *readWriter) SetWriteDeadline(t time.Time) error {
 	return nil
 }
+
+func BenchmarkRouterGet(b *testing.B) {
+	resp := []byte("Bench GET")
+
+	router := New()
+	router.GET("/bench", func(ctx *fasthttp.RequestCtx) {
+		if !ctx.IsGet() {
+			b.Fatalf("Unexpected request method: %s", ctx.Method())
+		}
+		ctx.Success("text/plain", resp)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/bench")
+
+	for i := 0; i < b.N; i++ {
+		router.Handler(ctx)
+	}
+}
