@@ -18,13 +18,10 @@ This router is optimized for high performance and a small memory footprint. It s
 - I fork this repo is just because there is no router for `fasthttp` at that time. And `router` is the FIRST router for `fasthttp`. 
 - `router` has been used in my online production and processes 17 million requests per day. It is fast and stable, so I decide to release a stable version.
 
-#### Releases
-
-- [2016.10.24] [v0.1.0](https://github.com/fasthttp/router/releases/tag/v0.1.0) The first release version of `router`.
 
 ## Features
 
-**Best Performance:** FastHttpRouter is **one of the fastest** go web frameworks in the [go-web-framework-benchmark](https://github.com/smallnest/go-web-framework-benchmark). Even faster than httprouter itself.
+**Best Performance:** Router is **one of the fastest** go web frameworks in the [go-web-framework-benchmark](https://github.com/smallnest/go-web-framework-benchmark). Even faster than httprouter itself.
 
 - Basic Test: The first test case is to mock 0 ms, 10 ms, 100 ms, 500 ms processing time in handlers. The concurrency clients are 5000.
 
@@ -52,7 +49,7 @@ If you don't like it, you can [turn off this behavior](http://godoc.org/github.c
 slash at no extra cost, the router can also fix wrong cases and remove
 superfluous path elements (like `../` or `//`).
 Is [CAPTAIN CAPS LOCK](http://www.urbandictionary.com/define.php?term=Captain+Caps+Lock) one of your users?
-FastHttpRouter can help him by making a case-insensitive look-up and redirecting him
+Router can help him by making a case-insensitive look-up and redirecting him
 to the correct URL.
 
 **Parameters in your routing pattern:** Stop parsing the requested URL path,
@@ -92,19 +89,19 @@ import (
 )
 
 func Index(ctx *fasthttp.RequestCtx) {
-	fmt.Fprint(ctx, "Welcome!\n")
+	ctx.WriteString("Welcome!")
 }
 
 func Hello(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "hello, %s!\n", ctx.UserValue("name"))
+	fmt.Fprintf(ctx, "Hello, %s!\n", ctx.UserValue("name"))
 }
 
 func main() {
-	router := router.New()
-	router.GET("/", Index)
-	router.GET("/hello/:name", Hello)
+	r := router.New()
+	r.GET("/", Index)
+	r.GET("/hello/:name", Hello)
 
-	log.Fatal(fasthttp.ListenAndServe(":8080", router.Handler))
+	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 }
 ```
 
@@ -180,9 +177,9 @@ For even better scalability, the child nodes on each tree level are ordered by p
 
 Because fasthttp doesn't provide http.Handler. See this [description](https://github.com/valyala/fasthttp#switching-from-nethttp-to-fasthttp).
 
-Fasthttp works with [RequestHandler](https://godoc.org/github.com/valyala/fasthttp#RequestHandler) functions instead of objects implementing Handler interface. So a FastHttpRouter provides a [Handler](https://godoc.org/github.com/fasthttp/router#Router.Handler) interface to implement the fasthttp.ListenAndServe interface.
+Fasthttp works with [RequestHandler](https://godoc.org/github.com/valyala/fasthttp#RequestHandler) functions instead of objects implementing Handler interface. So a Router provides a [Handler](https://godoc.org/github.com/fasthttp/router#Router.Handler) interface to implement the fasthttp.ListenAndServe interface.
 
-Just try it out for yourself, the usage of FastHttpRouter is very straightforward. The package is compact and minimalistic, but also probably one of the easiest routers to set up.
+Just try it out for yourself, the usage of Router is very straightforward. The package is compact and minimalistic, but also probably one of the easiest routers to set up.
 
 ## Where can I find Middleware *X*?
 
@@ -204,13 +201,13 @@ The `NotFound` handler can for example be used to serve static files from the ro
 
 ```go
 // Serve static files from the ./public directory
-router.NotFound = fasthttp.FSHandler("./public", 0)
+r.NotFound = fasthttp.FSHandler("./public", 0)
 ```
 
 But this approach sidesteps the strict core rules of this router to avoid routing problems. A cleaner approach is to use a distinct sub-path for serving files, like `/static/*filepath` or `/files/*filepath`.
 
-## Web Frameworks based on FastHttpRouter
+## Web Frameworks based on Router
 
 If the HttpRouter is a bit too minimalistic for you, you might try one of the following more high-level 3rd-party web frameworks building upon the HttpRouter package:
 
-- Waiting for you to do this...
+- [Atreugo](https://github.com/savsgio/atreugo)

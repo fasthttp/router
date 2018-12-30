@@ -71,9 +71,9 @@ func main() {
 	user := "gordon"
 	pass := "secret!"
 
-	router := router.New()
-	router.GET("/", Index)
-	router.GET("/protected/", BasicAuth(Protected, user, pass))
+	r := router.New()
+	r.GET("/", Index)
+	r.GET("/protected/", BasicAuth(Protected, user, pass))
 
-	log.Fatal(fasthttp.ListenAndServe(":8080", router.Handler))
+	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 }

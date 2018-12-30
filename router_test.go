@@ -7,7 +7,6 @@ package router
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -617,7 +616,7 @@ func TestRouterNotFound(t *testing.T) {
 		{"/DIR/", 301},           // Fixed Case +/
 		{"/paTh/?name=foo", 301}, // Fixed Case With Params +/
 		{"/paTh?name=foo", 301},  // Fixed Case With Params +/
-		{"/../path", 200},        // CleanPath
+		{"/../path", 301},        // CleanPath
 		{"/nope", 404},           // NotFound
 	}
 
@@ -815,15 +814,6 @@ func TestRouterLookup(t *testing.T) {
 	}
 }
 
-type mockFileSystem struct {
-	opened bool
-}
-
-func (mfs *mockFileSystem) Open(name string) (http.File, error) {
-	mfs.opened = true
-	return nil, errors.New("this is just a mock")
-}
-
 func TestRouterServeFiles(t *testing.T) {
 	router := New()
 
@@ -914,9 +904,57 @@ func BenchmarkRouterGet(b *testing.B) {
 
 	router := New()
 	router.GET("/bench", func(ctx *fasthttp.RequestCtx) {
-		if !ctx.IsGet() {
-			b.Fatalf("Unexpected request method: %s", ctx.Method())
-		}
+		ctx.Success("text/plain", resp)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/bench")
+
+	for i := 0; i < b.N; i++ {
+		router.Handler(ctx)
+	}
+}
+
+func BenchmarkRouterNotFound(b *testing.B) {
+	resp := []byte("Bench Not Found")
+
+	router := New()
+	router.GET("/bench", func(ctx *fasthttp.RequestCtx) {
+		ctx.Success("text/plain", resp)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/notfound")
+
+	for i := 0; i < b.N; i++ {
+		router.Handler(ctx)
+	}
+}
+
+func BenchmarkRouterCleanPath(b *testing.B) {
+	resp := []byte("Bench GET")
+
+	router := New()
+	router.GET("/bench", func(ctx *fasthttp.RequestCtx) {
+		ctx.Success("text/plain", resp)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/../bench/")
+
+	for i := 0; i < b.N; i++ {
+		router.Handler(ctx)
+	}
+}
+
+func BenchmarkRouterRedirectTrailingSlash(b *testing.B) {
+	resp := []byte("Bench GET")
+
+	router := New()
+	router.GET("/bench/", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})
 

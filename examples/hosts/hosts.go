@@ -37,14 +37,14 @@ func (hs HostSwitch) CheckHost(ctx *fasthttp.RequestCtx) {
 
 func main() {
 	// Initialize a router as usual
-	router := router.New()
-	router.GET("/", Index)
-	router.GET("/hello/:name", Hello)
+	r := router.New()
+	r.GET("/", Index)
+	r.GET("/hello/:name", Hello)
 
 	// Make a new HostSwitch and insert the router (our http handler)
 	// for example.com and port 12345
 	hs := make(HostSwitch)
-	hs["example.com:12345"] = router.Handler
+	hs["example.com:12345"] = r.Handler
 
 	// Use the HostSwitch to listen and serve on port 12345
 	log.Fatal(fasthttp.ListenAndServe(":12345", hs.CheckHost))

@@ -6,11 +6,33 @@ package router
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/savsgio/gotils"
 	"github.com/valyala/fasthttp"
 )
+
+type buffer struct {
+	b []byte
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return &buffer{
+			b: make([]byte, 0, 0),
+		}
+	},
+}
+
+func acquireBuffer() *buffer {
+	return bufferPool.Get().(*buffer)
+}
+
+func releaseBuffer(b *buffer) {
+	bufferPool.Put(b)
+}
 
 func min(a, b int) int {
 	if a <= b {
@@ -443,13 +465,21 @@ walk: // outer loop for walking the tree
 // It returns the case-corrected path and a bool indicating whether the lookup
 // was successful.
 func (n *node) findCaseInsensitivePath(path string, fixTrailingSlash bool) ([]byte, bool) {
-	return n.findCaseInsensitivePathRec(
+	buff := acquireBuffer()
+
+	buff.b = gotils.ExtendByteSlice(buff.b, len(path)+1) // preallocate enough memory for new path
+
+	fixedPath, found := n.findCaseInsensitivePathRec(
 		path,
 		strings.ToLower(path),
-		make([]byte, 0, len(path)+1), // preallocate enough memory for new path
-		[4]byte{},                    // empty rune buffer
+		buff.b[:0],
+		[4]byte{}, // empty rune buffer
 		fixTrailingSlash,
 	)
+
+	releaseBuffer(buff)
+
+	return fixedPath, found
 }
 
 // shift bytes in array by n bytes left

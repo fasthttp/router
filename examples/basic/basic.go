@@ -32,11 +32,11 @@ func QueryArgs(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
-	router := router.New()
-	router.GET("/", Index)
-	router.GET("/hello/:name", Hello)
-	router.GET("/multi/:name/:word", MultiParams)
-	router.GET("/ping", QueryArgs)
+	r := router.New()
+	r.GET("/", Index)
+	r.GET("/hello/:name", Hello)
+	r.GET("/multi/:name/:word", MultiParams)
+	r.GET("/ping", QueryArgs)
 
-	log.Fatal(fasthttp.ListenAndServe(":8080", router.Handler))
+	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 }

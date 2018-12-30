@@ -5,8 +5,51 @@
 
 package router
 
+import (
+	"sync"
+
+	"github.com/savsgio/gotils"
+)
+
+type cleanPathBuffer struct {
+	n        int
+	r        int
+	w        int
+	trailing bool
+	buf      []byte
+}
+
+var cleanPathBufferPool = sync.Pool{
+	New: func() interface{} {
+		return &cleanPathBuffer{
+			n:        0,
+			r:        0,
+			w:        1,
+			trailing: false,
+			buf:      make([]byte, 140),
+		}
+	},
+}
+
+func (cpb *cleanPathBuffer) reset() {
+	cpb.n = 0
+	cpb.r = 0
+	cpb.w = 1
+	cpb.trailing = false
+	// cpb.buf = cpb.buf[:0]
+}
+
+func acquireCleanPathBuffer() *cleanPathBuffer {
+	return cleanPathBufferPool.Get().(*cleanPathBuffer)
+}
+
+func releaseCleanPathBuffer(cpb *cleanPathBuffer) {
+	cpb.reset()
+	cleanPathBufferPool.Put(cpb)
+}
+
 // CleanPath is the URL version of path.Clean, it returns a canonical URL path
-// for p, eliminating . and .. elements.
+// for path, eliminating . and .. elements.
 //
 // The following rules are applied iteratively until no further processing can
 // be done:
@@ -18,106 +61,84 @@ package router
 //	   that is, replace "/.." by "/" at the beginning of a path.
 //
 // If the result of this process is an empty string, "/" is returned
-func CleanPath(p string) string {
+func CleanPath(path string) string {
+	cpb := acquireCleanPathBuffer()
+	cleanPathWithBuffer(cpb, path)
+
+	s := string(cpb.buf)
+	releaseCleanPathBuffer(cpb)
+
+	return s
+}
+
+func cleanPathWithBuffer(cpb *cleanPathBuffer, path string) {
 	// Turn empty string into "/"
-	if p == "" {
-		return "/"
+	if path == "" {
+		cpb.buf = append(cpb.buf[:0], '/')
+		return
 	}
 
-	n := len(p)
-	var buf []byte
+	cpb.n = len(path)
+	cpb.buf = gotils.ExtendByteSlice(cpb.buf, len(path)+1)
+	cpb.buf[0] = '/'
 
-	// Invariants:
-	//      reading from path; r is index of next byte to process.
-	//      writing to buf; w is index of next byte to write.
-
-	// path must start with '/'
-	r := 1
-	w := 1
-
-	if p[0] != '/' {
-		r = 0
-		buf = make([]byte, n+1)
-		buf[0] = '/'
-	}
-
-	trailing := n > 2 && p[n-1] == '/'
+	cpb.trailing = cpb.n > 2 && path[cpb.n-1] == '/'
 
 	// A bit more clunky without a 'lazybuf' like the path package, but the loop
 	// gets completely inlined (bufApp). So in contrast to the path package this
 	// loop has no expensive function calls (except 1x make)
 
-	for r < n {
+	for cpb.r < cpb.n {
+		// println(path[:cpb.r], " ####### ", string(path[cpb.r]), " ####### ", string(cpb.buf))
 		switch {
-		case p[r] == '/':
+		case path[cpb.r] == '/':
 			// empty path element, trailing slash is added after the end
-			r++
+			cpb.r++
 
-		case p[r] == '.' && r+1 == n:
-			trailing = true
-			r++
+		case path[cpb.r] == '.' && cpb.r+1 == cpb.n:
+			cpb.trailing = true
+			cpb.r++
 
-		case p[r] == '.' && p[r+1] == '/':
+		case path[cpb.r] == '.' && path[cpb.r+1] == '/':
 			// . element
-			r++
+			cpb.r++
 
-		case p[r] == '.' && p[r+1] == '.' && (r+2 == n || p[r+2] == '/'):
+		case path[cpb.r] == '.' && path[cpb.r+1] == '.' && (cpb.r+2 == cpb.n || path[cpb.r+2] == '/'):
 			// .. element: remove to last /
-			r += 2
+			cpb.r += 2
 
-			if w > 1 {
+			if cpb.w > 1 {
 				// can backtrack
-				w--
+				cpb.w--
 
-				if buf == nil {
-					for w > 1 && p[w] != '/' {
-						w--
-					}
-				} else {
-					for w > 1 && buf[w] != '/' {
-						w--
-					}
+				for cpb.w > 1 && cpb.buf[cpb.w] != '/' {
+					cpb.w--
 				}
+
 			}
 
 		default:
 			// real path element.
 			// add slash if needed
-			if w > 1 {
-				bufApp(&buf, p, w, '/')
-				w++
+			if cpb.w > 1 {
+				cpb.buf[cpb.w] = '/'
+				cpb.w++
 			}
 
 			// copy element
-			for r < n && p[r] != '/' {
-				bufApp(&buf, p, w, p[r])
-				w++
-				r++
+			for cpb.r < cpb.n && path[cpb.r] != '/' {
+				cpb.buf[cpb.w] = path[cpb.r]
+				cpb.w++
+				cpb.r++
 			}
 		}
 	}
 
 	// re-append trailing slash
-	if trailing && w > 1 {
-		bufApp(&buf, p, w, '/')
-		w++
+	if cpb.trailing && cpb.w > 1 {
+		cpb.buf[cpb.w] = '/'
+		cpb.w++
 	}
 
-	if buf == nil {
-		return p[:w]
-	}
-	return string(buf[:w])
-}
-
-// internal helper to lazily create a buffer if necessary
-func bufApp(buf *[]byte, s string, w int, c byte) {
-	if *buf == nil {
-		if s[w] == c {
-			return
-		}
-
-		*buf = make([]byte, len(s))
-		copy(*buf, s[:w])
-	}
-	(*buf)[w] = c
+	cpb.buf = cpb.buf[:cpb.w]
 }

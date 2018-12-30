@@ -77,6 +77,7 @@ import (
 	"strings"
 
 	"github.com/savsgio/gotils"
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
@@ -294,7 +295,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		defer r.recv(ctx)
 	}
 
-	path := gotils.B2S(ctx.Path())
+	path := gotils.B2S(ctx.URI().PathOriginal())
 	method := gotils.B2S(ctx.Method())
 
 	if root := r.trees[method]; root != nil {
@@ -310,27 +311,33 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 			}
 
 			if tsr && r.RedirectTrailingSlash {
-				var uri string
+				uri := bytebufferpool.Get()
+
 				if len(path) > 1 && path[len(path)-1] == '/' {
-					uri = path[:len(path)-1]
+					uri.SetString(path[:len(path)-1])
 				} else {
-					uri = path + "/"
+					uri.SetString(path)
+					uri.WriteString("/")
 				}
 
 				if len(ctx.URI().QueryString()) > 0 {
-					uri += "?" + string(ctx.QueryArgs().QueryString())
+					uri.WriteString("?")
+					uri.Write(ctx.QueryArgs().QueryString())
 				}
 
-				ctx.Redirect(uri, code)
+				ctx.Redirect(uri.String(), code)
+
+				bytebufferpool.Put(uri)
+
 				return
 			}
 
 			// Try to fix the request path
 			if r.RedirectFixedPath {
-				fixedPath, found := root.findCaseInsensitivePath(
-					CleanPath(path),
-					r.RedirectTrailingSlash,
-				)
+				cpb := acquireCleanPathBuffer()
+				cleanPathWithBuffer(cpb, path)
+				fixedPath, found := root.findCaseInsensitivePath(gotils.B2S(cpb.buf), r.RedirectTrailingSlash)
+				releaseCleanPathBuffer(cpb)
 
 				if found {
 					queryBuf := ctx.URI().QueryString()
