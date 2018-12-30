@@ -25,11 +25,11 @@
 // }
 
 // func main() {
-//     router := router.New()
-//     router.GET("/", Index)
-//     router.GET("/hello/:name", Hello)
+//     r := router.New()
+//     r.GET("/", Index)
+//     r.GET("/hello/:name", Hello)
 
-//     log.Fatal(fasthttp.ListenAndServe(":8080", router.Handler))
+//     log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 // }
 //
 // The router matches incoming requests by the request method and the path.
