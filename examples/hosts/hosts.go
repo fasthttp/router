@@ -30,7 +30,7 @@ func (hs HostSwitch) CheckHost(ctx *fasthttp.RequestCtx) {
 	if handler := hs[string(ctx.Host())]; handler != nil {
 		handler(ctx)
 	} else {
-		// Handle host names for wich no handler is registered
+		// Handle host names for which no handler is registered
 		ctx.Error("Forbidden", 403) // Or Redirect?
 	}
 }
