@@ -208,7 +208,7 @@ r.NotFound = fasthttp.FSHandler("./public", 0)
 
 But this approach sidesteps the strict core rules of this router to avoid routing problems. A cleaner approach is to use a distinct sub-path for serving files, like `/static/*filepath` or `/files/*filepath`.
 
-## Web Frameworks based on fasthttprouter
+## Web Frameworks based on Router
 
 If the Router is a bit too minimalistic for you, you might try one of the following more high-level 3rd-party web frameworks building upon the Router package:
 
