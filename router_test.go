@@ -616,7 +616,7 @@ func TestRouterNotFound(t *testing.T) {
 		{"/DIR/", 301},           // Fixed Case +/
 		{"/paTh/?name=foo", 301}, // Fixed Case With Params +/
 		{"/paTh?name=foo", 301},  // Fixed Case With Params +/
-		{"/../path", 301},        // CleanPath
+		{"/../path", 200},        // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
 		{"/nope", 404},           // NotFound
 	}
 

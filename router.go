@@ -295,7 +295,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		defer r.recv(ctx)
 	}
 
-	path := gotils.B2S(ctx.URI().PathOriginal())
+	path := gotils.B2S(ctx.Path())
 	method := gotils.B2S(ctx.Method())
 
 	if root := r.trees[method]; root != nil {
