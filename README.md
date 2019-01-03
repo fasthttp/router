@@ -13,10 +13,12 @@ This router is optimized for high performance and a small memory footprint. It s
 #### License Related
 
 - The author of `httprouter` [@julienschmidt](https://github.com/julienschmidt) did almost all the hard work of this router.
-- I respect the laws of open source. So LICENSE of `httprouter` is alway stay here: [HttpRouterLicense](HttpRouterLicense).
-- What I do is just fit for `fasthttp`. I have no hope to build a huge but toxic go web framwork like [iris](https://github.com/kataras/iris). 
-- I fork this repo is just because there is no router for `fasthttp` at that time. And `router` is the FIRST router for `fasthttp`. 
-- `router` has been used in my online production and processes 17 million requests per day. It is fast and stable, so I decide to release a stable version.
+- The author of `fasthttprouter` [@buaazp](https://github.com/buaazp) did all the hard work by porting `httprouter` to fasthttp.
+- We ([@buaazp](https://github.com/buaazp) and fasthttp ecosystem team) respect the laws of open source. So LICENSE of `httprouter` is alway stay here: [HttpRouterLicense](HttpRouterLicense).
+- What [@buaazp](https://github.com/buaazp) have done is just fit for `fasthttp`. I have no hope to build a huge but toxic go web framwork like [iris](https://github.com/kataras/iris).
+- [@buaazp](https://github.com/buaazp) forked `fasthttp` repo is just because there is no router for `fasthttp` at that time. And `fasthttprouter` is the FIRST router for `fasthttp`.
+- `fasthttprouter` has been used in huge production environments and processes hundreds of millions requests per day. It is fast and stable, so [@buaazp](https://github.com/buaazp) decide to release a stable version.
+- This repo is based on `fasthttprouter` and maintained by official fasthttp ecosystem team. We trying to optimize it even more and check if it works well when we update something huge in fasthttp.
 
 
 ## Features
@@ -206,7 +208,7 @@ r.NotFound = fasthttp.FSHandler("./public", 0)
 
 But this approach sidesteps the strict core rules of this router to avoid routing problems. A cleaner approach is to use a distinct sub-path for serving files, like `/static/*filepath` or `/files/*filepath`.
 
-## Web Frameworks based on Router
+## Web Frameworks based on fasthttprouter
 
 If the Router is a bit too minimalistic for you, you might try one of the following more high-level 3rd-party web frameworks building upon the Router package:
 
