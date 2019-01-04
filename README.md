@@ -25,13 +25,15 @@ This router is optimized for high performance and a small memory footprint. It s
 
 **Best Performance:** Router is **one of the fastest** go web frameworks in the [go-web-framework-benchmark](https://github.com/smallnest/go-web-framework-benchmark). Even faster than httprouter itself.
 
-- Basic Test: The first test case is to mock 0 ms, 10 ms, 100 ms, 500 ms processing time in handlers. The concurrency clients are 5000.
+- Basic Test: The first test case is to mock 0 ms, 10 ms, 100 ms, 500 ms processing time in handlers.
 
-![](http://ww3.sinaimg.cn/large/4c422e03jw1f2p6nyqh9ij20mm0aktbj.jpg)
+![](https://raw.githubusercontent.com/smallnest/go-web-framework-benchmark/master/benchmark.png)
 
-- Concurrency Test: In 30 ms processing time, the test result for 100, 1000, 5000 clients is:
+- Concurrency Test (allocations): In 30 ms processing time, the tets result for 100, 1000, 5000 clients is:
 
-![](http://ww4.sinaimg.cn/large/4c422e03jw1f2p6o1cdbij20lk09sack.jpg)
+\* *Smaller is better*
+
+![](https://raw.githubusercontent.com/smallnest/go-web-framework-benchmark/master/concurrency_alloc.png)
 
 See below for technical details of the implementation.
 
