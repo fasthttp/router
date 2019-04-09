@@ -471,7 +471,7 @@ func (n *node) findCaseInsensitivePath(path string, fixTrailingSlash bool) ([]by
 
 	fixedPath, found := n.findCaseInsensitivePathRec(
 		path,
-		strings.ToLower(path),
+		toLower(path),
 		buff.b[:0],
 		[4]byte{}, // empty rune buffer
 		fixTrailingSlash,
@@ -500,7 +500,7 @@ func shiftNRuneBytes(rb [4]byte, n int) [4]byte {
 
 // recursive case-insensitive lookup function used by n.findCaseInsensitivePath
 func (n *node) findCaseInsensitivePathRec(path, loPath string, ciPath []byte, rb [4]byte, fixTrailingSlash bool) ([]byte, bool) {
-	loNPath := strings.ToLower(n.path)
+	loNPath := toLower(n.path)
 
 walk: // outer loop for walking the tree
 	for len(loPath) >= len(loNPath) && (len(loNPath) == 0 || loPath[1:len(loNPath)] == loNPath[1:]) {
@@ -524,7 +524,7 @@ walk: // outer loop for walking the tree
 						if n.indices[i] == rb[0] {
 							// continue with child node
 							n = n.children[i]
-							loNPath = strings.ToLower(n.path)
+							loNPath = toLower(n.path)
 							continue walk
 						}
 					}
@@ -574,7 +574,7 @@ walk: // outer loop for walking the tree
 							if n.indices[i] == rb[0] {
 								// continue with child node
 								n = n.children[i]
-								loNPath = strings.ToLower(n.path)
+								loNPath = toLower(n.path)
 								continue walk
 							}
 						}
@@ -603,7 +603,7 @@ walk: // outer loop for walking the tree
 					if len(n.children) > 0 {
 						// continue with child node
 						n = n.children[0]
-						loNPath = strings.ToLower(n.path)
+						loNPath = toLower(n.path)
 						loPath = loPath[k:]
 						path = path[k:]
 						continue
