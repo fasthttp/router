@@ -4,7 +4,17 @@ These examples show you the usage of `router`. You can easily build a web applic
 
 ### Basic Authentication
 
-Basic Authentication (RFC 2617) for handles:
+This Basic Authentication example uses `simple-scrypt` for password hashing:
+
+	go get -u github.com/elithrar/simple-scrypt
+
+Password hashing is used so that if your data store is compromised, the attackers will only have access to hashed passwords, which (if the hash is not itself compromised) will not be able to revert to the original plain text password.
+
+After you have hashed the password and stored the hash in a data store, you should throw away the original plain-text password.
+
+The next time the user attempts to log in, their password will be safely hashed and compared to the saved hash. If the hashes match, then the user will be accepted.
+
+Only use constant time comparison functions that are built into your hash library to compare secret strings like passwords or hashes to prevent timing attacks.
 
 ```go
 package main
