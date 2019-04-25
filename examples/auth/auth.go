@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fasthttp/router"
+	"github.com/elithrar/simple-scrypt"
 	"github.com/valyala/fasthttp"
 )
 
@@ -41,16 +42,38 @@ func parseBasicAuth(auth string) (username, password string, ok bool) {
 }
 
 // BasicAuth is the basic auth handler
-func BasicAuth(h fasthttp.RequestHandler, requiredUser, requiredPassword string) fasthttp.RequestHandler {
+func BasicAuth(h fasthttp.RequestHandler, requiredUser string, requiredPasswordHash []byte) fasthttp.RequestHandler {
 	return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
 		// Get the Basic Authentication credentials
 		user, password, hasAuth := basicAuth(ctx)
+		
+		// WARNING: 
+		// DO NOT use plain-text passwords for real apps.
+		// A simple string comparison using == is vulnerable to a timing attack.
+		// Instead, use the hash comparison function found in your hash library.
+		// This example uses scrypt, which is a solid choice for secure hashing:
+		//   go get -u github.com/elithrar/simple-scrypt
+		
+		if hasAuth && user == requiredUser {
+						
+			// Uses the parameters from the existing derived key. Return an error if they don't match.
+			err := scrypt.CompareHashAndPassword(requiredPasswordHash, []byte(password))
 
-		if hasAuth && user == requiredUser && password == requiredPassword {
-			// Delegate request to the given handle
-			h(ctx)
-			return
+		    	if err != nil {
+				
+				// log error and request Basic Authentication again below.
+				log.Fatal(err)
+				
+		    	} else {
+				
+				// Delegate request to the given handle
+				h(ctx)
+				return
+				
+		    	}
+			
 		}
+		
 		// Request Basic Authentication otherwise
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
 		ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
@@ -70,10 +93,16 @@ func Protected(ctx *fasthttp.RequestCtx) {
 func main() {
 	user := "gordon"
 	pass := "secret!"
+	
+	// generate a hashed password from the password above:
+	hashedPassword, err := scrypt.GenerateFromPassword([]byte(pass), scrypt.DefaultParams)
+    	if err != nil {
+        	log.Fatal(err)
+    	}
 
 	r := router.New()
 	r.GET("/", Index)
-	r.GET("/protected/", BasicAuth(Protected, user, pass))
+	r.GET("/protected/", BasicAuth(Protected, user, hashedPassword))
 
 	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 }
