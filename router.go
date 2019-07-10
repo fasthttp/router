@@ -27,6 +27,8 @@
 // func main() {
 //     r := router.New()
 //     r.GET("/", Index)
+//     g := r.Group("/foo", Index)
+//     g.GET("/bar", Index)
 //     r.GET("/hello/:name", Hello)
 
 //     log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
@@ -89,7 +91,8 @@ var (
 // Router is a http.Handler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
-	trees map[string]*node
+	beginPath string
+	trees     map[string]*node
 
 	// Enables automatic redirection if the current route can't be matched but a
 	// handler for the path with (without) the trailing slash exists.
@@ -144,6 +147,19 @@ type Router struct {
 // Path auto-correction, including trailing slashes, is enabled by default.
 func New() *Router {
 	return &Router{
+		beginPath:              "/",
+		RedirectTrailingSlash:  true,
+		RedirectFixedPath:      true,
+		HandleMethodNotAllowed: true,
+		HandleOPTIONS:          true,
+	}
+}
+
+// Group returns a new grouped Router.
+// Path auto-correction, including trailing slashes, is enabled by default.
+func (r *Router) Group(path string) *Router {
+	return &Router{
+		beginPath:              path,
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
@@ -198,7 +214,9 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 	if path[0] != '/' {
 		panic("path must begin with '/' in path '" + path + "'")
 	}
-
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
 	if r.trees == nil {
 		r.trees = make(map[string]*node)
 	}

@@ -309,6 +309,92 @@ func TestRouterChaining(t *testing.T) {
 	}
 }
 
+func TestRouterGroup(t *testing.T) {
+	r1 := New()
+	r2 := r1.Group("/boo")
+	r1.NotFound = r2.Handler
+	fooHit := false
+	r1.POST("/foo", func(ctx *fasthttp.RequestCtx) {
+		fooHit = true
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	barHit := false
+	r2.POST("/bar", func(ctx *fasthttp.RequestCtx) {
+		barHit = true
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	s := &fasthttp.Server{
+		Handler: r1.Handler,
+	}
+
+	rw := &readWriter{}
+	ch := make(chan error)
+
+	rw.r.WriteString("POST /foo HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	br := bufio.NewReader(&rw.w)
+	var resp fasthttp.Response
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusOK && fooHit) {
+		t.Errorf("Regular routing failed with router chaining.")
+		t.FailNow()
+	}
+
+	rw.r.WriteString("POST /boo/bar HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
+		t.Errorf("Chained routing failed with router chaining.")
+		t.FailNow()
+	}
+
+	rw.r.WriteString("POST /qax HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusNotFound) {
+		t.Errorf("NotFound behavior failed with router chaining.")
+		t.FailNow()
+	}
+}
+
 func TestRouterOPTIONS(t *testing.T) {
 	// TODO: because fasthttp is not support OPTIONS method now,
 	// these test cases will be used in the future.
