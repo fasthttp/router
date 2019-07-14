@@ -158,13 +158,15 @@ func New() *Router {
 // Group returns a new grouped Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Router {
-	return &Router{
+	g := &Router{
 		beginPath:              path,
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
 		HandleOPTIONS:          true,
 	}
+	r.NotFound = g.Handler
+	return g
 }
 
 // GET is a shortcut for router.Handle("GET", path, handle)

@@ -312,7 +312,6 @@ func TestRouterChaining(t *testing.T) {
 func TestRouterGroup(t *testing.T) {
 	r1 := New()
 	r2 := r1.Group("/boo")
-	r1.NotFound = r2.Handler
 	fooHit := false
 	r1.POST("/foo", func(ctx *fasthttp.RequestCtx) {
 		fooHit = true
