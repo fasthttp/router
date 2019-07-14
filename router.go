@@ -202,6 +202,36 @@ func (r *Router) DELETE(path string, handle fasthttp.RequestHandler) {
 	r.Handle("DELETE", path, handle)
 }
 
+// returns all possible paths when the original path has optional arguments
+func getOptionalPaths(path string) []string {
+	paths := make([]string, 0)
+
+	index := 0
+	newParam := false
+	for i := 0; i < len(path); i++ {
+		c := path[i]
+
+		if c == ':' {
+			index = i
+			newParam = true
+		} else if i > 0 && newParam && c == '?' {
+			p := strings.Replace(path[:index], "?", "", -1)
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			p = strings.Replace(path[:i], "?", "", -1) + "/"
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			newParam = false
+		}
+	}
+
+	return paths
+}
+
 // Handle registers a new request handle with the given path and method.
 //
 // For GET, POST, PUT, PATCH and DELETE requests the respective shortcut
@@ -227,7 +257,16 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 		r.trees[method] = root
 	}
 
-	root.addRoute(path, handle)
+	optionalPaths := getOptionalPaths(path)
+
+	// if not has optional paths, adds the original
+	if len(optionalPaths) == 0 {
+		root.addRoute(path, handle)
+	} else {
+		for _, p := range optionalPaths {
+			root.addRoute(p, handle)
+		}
+	}
 }
 
 // ServeFiles serves files from the given file system root.
