@@ -312,6 +312,8 @@ func TestRouterChaining(t *testing.T) {
 func TestRouterGroup(t *testing.T) {
 	r1 := New()
 	r2 := r1.Group("/boo")
+	r3 := r1.Group("/goo")
+	r4 := r1.Group("/moo")
 	fooHit := false
 	r1.POST("/foo", func(ctx *fasthttp.RequestCtx) {
 		fooHit = true
@@ -323,7 +325,14 @@ func TestRouterGroup(t *testing.T) {
 		barHit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
-
+	r3.POST("/bar", func(ctx *fasthttp.RequestCtx) {
+		barHit = true
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+	r4.POST("/bar", func(ctx *fasthttp.RequestCtx) {
+		barHit = true
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
 	s := &fasthttp.Server{
 		Handler: r1.Handler,
 	}
@@ -369,7 +378,47 @@ func TestRouterGroup(t *testing.T) {
 		t.Fatalf("Unexpected error when reading response: %s", err)
 	}
 	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with router chaining.")
+		t.Errorf("Chained routing failed with router grouping.")
+		t.FailNow()
+	}
+
+	rw.r.WriteString("POST /goo/bar HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
+		t.Errorf("Chained routing failed with router grouping.")
+		t.FailNow()
+	}
+
+	rw.r.WriteString("POST /moo/bar HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
+		t.Errorf("Chained routing failed with router grouping.")
 		t.FailNow()
 	}
 
