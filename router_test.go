@@ -371,7 +371,7 @@ func TestRouterGroup(t *testing.T) {
 		t.Errorf("Regular routing failed with router chaining.")
 		t.FailNow()
 	}
-
+	// testing router group - r2 (grouped from r1)
 	rw.r.WriteString("POST /boo/bar HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
@@ -391,7 +391,7 @@ func TestRouterGroup(t *testing.T) {
 		t.Errorf("Chained routing failed with router grouping.")
 		t.FailNow()
 	}
-
+	// testing multiple router group - r3 (grouped from r1)
 	rw.r.WriteString("POST /goo/bar HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
@@ -411,7 +411,7 @@ func TestRouterGroup(t *testing.T) {
 		t.Errorf("Chained routing failed with router grouping.")
 		t.FailNow()
 	}
-
+	// testing multiple router group - r4 (grouped from r1)
 	rw.r.WriteString("POST /moo/bar HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
@@ -431,7 +431,7 @@ func TestRouterGroup(t *testing.T) {
 		t.Errorf("Chained routing failed with router grouping.")
 		t.FailNow()
 	}
-
+	// testing sub-router group - r5 (grouped from r4)
 	rw.r.WriteString("POST /moo/foo/bar HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
@@ -451,6 +451,7 @@ func TestRouterGroup(t *testing.T) {
 		t.Errorf("Chained routing failed with subrouter grouping.")
 		t.FailNow()
 	}
+	// testing multiple sub-router group - r6 (grouped from r5)
 	rw.r.WriteString("POST /moo/foo/foo/bar HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
