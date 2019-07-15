@@ -220,20 +220,21 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 	if r.beginPath != "/" {
 		path = r.beginPath + path
 	}
-	var route *Router
+
+	// Call to the parent recursively until main router to register paths in it
 	if r.parent != nil {
-		route = r.parent
-	} else {
-		route = r
-	}
-	if route.trees == nil {
-		route.trees = make(map[string]*node)
+		r.parent.Handle(method, path, handle)
+		return
 	}
 
-	root := route.trees[method]
+	if r.trees == nil {
+		r.trees = make(map[string]*node)
+	}
+
+	root := r.trees[method]
 	if root == nil {
 		root = new(node)
-		route.trees[method] = root
+		r.trees[method] = root
 	}
 
 	root.addRoute(path, handle)
