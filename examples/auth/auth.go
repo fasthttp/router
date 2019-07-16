@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/fasthttp/router"
 	"github.com/elithrar/simple-scrypt"
+	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
@@ -46,34 +46,34 @@ func BasicAuth(h fasthttp.RequestHandler, requiredUser string, requiredPasswordH
 	return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
 		// Get the Basic Authentication credentials
 		user, password, hasAuth := basicAuth(ctx)
-		
-		// WARNING: 
+
+		// WARNING:
 		// DO NOT use plain-text passwords for real apps.
 		// A simple string comparison using == is vulnerable to a timing attack.
 		// Instead, use the hash comparison function found in your hash library.
 		// This example uses scrypt, which is a solid choice for secure hashing:
 		//   go get -u github.com/elithrar/simple-scrypt
-		
+
 		if hasAuth && user == requiredUser {
-						
+
 			// Uses the parameters from the existing derived key. Return an error if they don't match.
 			err := scrypt.CompareHashAndPassword(requiredPasswordHash, []byte(password))
 
-		    	if err != nil {
-				
+			if err != nil {
+
 				// log error and request Basic Authentication again below.
 				log.Fatal(err)
-				
-		    	} else {
-				
+
+			} else {
+
 				// Delegate request to the given handle
 				h(ctx)
 				return
-				
-		    	}
-			
+
+			}
+
 		}
-		
+
 		// Request Basic Authentication otherwise
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
 		ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
@@ -93,12 +93,12 @@ func Protected(ctx *fasthttp.RequestCtx) {
 func main() {
 	user := "gordon"
 	pass := "secret!"
-	
+
 	// generate a hashed password from the password above:
 	hashedPassword, err := scrypt.GenerateFromPassword([]byte(pass), scrypt.DefaultParams)
-    	if err != nil {
-        	log.Fatal(err)
-    	}
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	r := router.New()
 	r.GET("/", Index)
