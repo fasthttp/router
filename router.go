@@ -91,6 +91,7 @@ var (
 // Router is a http.Handler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
+	parent    *Router
 	beginPath string
 	trees     map[string]*node
 
@@ -158,13 +159,15 @@ func New() *Router {
 // Group returns a new grouped Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Router {
-	return &Router{
+	g := &Router{
+		parent:                 r,
 		beginPath:              path,
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
 		HandleOPTIONS:          true,
 	}
+	return g
 }
 
 // GET is a shortcut for router.Handle("GET", path, handle)
@@ -247,6 +250,13 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 	if r.beginPath != "/" {
 		path = r.beginPath + path
 	}
+
+	// Call to the parent recursively until main router to register paths in it
+	if r.parent != nil {
+		r.parent.Handle(method, path, handle)
+		return
+	}
+
 	if r.trees == nil {
 		r.trees = make(map[string]*node)
 	}
