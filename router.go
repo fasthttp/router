@@ -291,6 +291,16 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
 		panic("path must end with /*filepath in path '" + path + "'")
 	}
+
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
+
+	if r.parent != nil {
+		r.parent.ServeFiles(path, rootPath)
+		return
+	}
+
 	prefix := path[:len(path)-10]
 
 	fileHandler := fasthttp.FSHandler(rootPath, strings.Count(prefix, "/"))

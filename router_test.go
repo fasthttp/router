@@ -370,6 +370,8 @@ func TestRouterGroup(t *testing.T) {
 		barHit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
+	r6.ServeFiles("/static/*filepath", "./")
+
 	s := &fasthttp.Server{
 		Handler: r1.Handler,
 	}
@@ -480,6 +482,27 @@ func TestRouterGroup(t *testing.T) {
 	}
 	// testing multiple sub-router group - r6 (grouped from r5)
 	rw.r.WriteString("POST /moo/foo/foo/bar HTTP/1.1\r\n\r\n")
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
+		t.Errorf("Chained routing failed with subrouter grouping.")
+		t.FailNow()
+	}
+
+	// testing multiple sub-router group - r6 (grouped from r5) to serve files
+	rw.r.WriteString("GET /moo/foo/foo/static/router.go HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
 	}()
