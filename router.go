@@ -302,8 +302,42 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 	}
 
 	prefix := path[:len(path)-10]
-
 	fileHandler := fasthttp.FSHandler(rootPath, strings.Count(prefix, "/"))
+
+	r.GET(path, func(ctx *fasthttp.RequestCtx) {
+		fileHandler(ctx)
+	})
+}
+
+// ServeFilesCustom serves files from the given file system settings.
+// The path must end with "/*filepath", files are then served from the local
+// path /defined/root/dir/*filepath.
+// For example if root is "/etc" and *filepath is "passwd", the local file
+// "/etc/passwd" would be served.
+// Internally a http.FileServer is used, therefore http.NotFound is used instead
+// of the Router's NotFound handler.
+//     router.ServeFilesCustom("/src/*filepath", *customFS)
+func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
+	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
+		panic("path must end with /*filepath in path '" + path + "'")
+	}
+
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
+
+	if r.parent != nil {
+		r.parent.ServeFilesCustom(path, fs)
+		return
+	}
+
+	prefix := path[:len(path)-10]
+	stripSlashes := strings.Count(prefix, "/")
+
+	if fs.PathRewrite == nil && stripSlashes > 0 {
+		fs.PathRewrite = fasthttp.NewPathSlashesStripper(stripSlashes)
+	}
+	fileHandler := fs.NewRequestHandler()
 
 	r.GET(path, func(ctx *fasthttp.RequestCtx) {
 		fileHandler(ctx)

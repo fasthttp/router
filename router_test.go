@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -343,34 +344,35 @@ func TestRouterGroup(t *testing.T) {
 	r4 := r1.Group("/moo")
 	r5 := r4.Group("/foo")
 	r6 := r5.Group("/foo")
-	fooHit := false
+
+	hit := false
+
 	r1.POST("/foo", func(ctx *fasthttp.RequestCtx) {
-		fooHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
-
-	barHit := false
 	r2.POST("/bar", func(ctx *fasthttp.RequestCtx) {
-		barHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r3.POST("/bar", func(ctx *fasthttp.RequestCtx) {
-		barHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r4.POST("/bar", func(ctx *fasthttp.RequestCtx) {
-		barHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r5.POST("/bar", func(ctx *fasthttp.RequestCtx) {
-		barHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r6.POST("/bar", func(ctx *fasthttp.RequestCtx) {
-		barHit = true
+		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r6.ServeFiles("/static/*filepath", "./")
+	r6.ServeFilesCustom("/custom/static/*filepath", &fasthttp.FS{Root: "./"})
 
 	s := &fasthttp.Server{
 		Handler: r1.Handler,
@@ -379,7 +381,54 @@ func TestRouterGroup(t *testing.T) {
 	rw := &readWriter{}
 	ch := make(chan error)
 
-	rw.r.WriteString("POST /foo HTTP/1.1\r\n\r\n")
+	requests := []string{
+		"POST /foo HTTP/1.1\r\n\r\n",
+		// testing router group - r2 (grouped from r1)
+		"POST /boo/bar HTTP/1.1\r\n\r\n",
+		// testing multiple router group - r3 (grouped from r1)
+		"POST /goo/bar HTTP/1.1\r\n\r\n",
+		// testing multiple router group - r4 (grouped from r1)
+		"POST /moo/bar HTTP/1.1\r\n\r\n",
+		// testing sub-router group - r5 (grouped from r4)
+		"POST /moo/foo/bar HTTP/1.1\r\n\r\n",
+		// testing multiple sub-router group - r6 (grouped from r5)
+		"POST /moo/foo/foo/bar HTTP/1.1\r\n\r\n",
+		// testing multiple sub-router group - r6 (grouped from r5) to serve files
+		"GET /moo/foo/foo/static/router.go HTTP/1.1\r\n\r\n",
+		// testing multiple sub-router group - r6 (grouped from r5) to serve files with custom settings
+		"GET /moo/foo/foo/custom/static/router.go HTTP/1.1\r\n\r\n",
+	}
+
+	for _, req := range requests {
+		hit = false
+
+		rw.r.WriteString(req)
+		go func() {
+			ch <- s.ServeConn(rw)
+		}()
+		select {
+		case err := <-ch:
+			if err != nil {
+				t.Fatalf("return error %s", err)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("timeout")
+		}
+		br := bufio.NewReader(&rw.w)
+		var resp fasthttp.Response
+		if err := resp.Read(br); err != nil {
+			t.Fatalf("Unexpected error when reading response: %s", err)
+		}
+		if !(resp.Header.StatusCode() == fasthttp.StatusOK) {
+			t.Fatalf("Status code %d, want %d", resp.Header.StatusCode(), fasthttp.StatusOK)
+		}
+		if !strings.Contains(req, "static") && !hit {
+			t.Fatalf("Regular routing failed with router chaining. %s", req)
+		}
+	}
+
+	// Not found
+	rw.r.WriteString("POST /qax HTTP/1.1\r\n\r\n")
 	go func() {
 		ch <- s.ServeConn(rw)
 	}()
@@ -393,147 +442,6 @@ func TestRouterGroup(t *testing.T) {
 	}
 	br := bufio.NewReader(&rw.w)
 	var resp fasthttp.Response
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && fooHit) {
-		t.Errorf("Regular routing failed with router chaining.")
-		t.FailNow()
-	}
-	// testing router group - r2 (grouped from r1)
-	rw.r.WriteString("POST /boo/bar HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with router grouping.")
-		t.FailNow()
-	}
-	// testing multiple router group - r3 (grouped from r1)
-	rw.r.WriteString("POST /goo/bar HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with router grouping.")
-		t.FailNow()
-	}
-	// testing multiple router group - r4 (grouped from r1)
-	rw.r.WriteString("POST /moo/bar HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with router grouping.")
-		t.FailNow()
-	}
-	// testing sub-router group - r5 (grouped from r4)
-	rw.r.WriteString("POST /moo/foo/bar HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with subrouter grouping.")
-		t.FailNow()
-	}
-	// testing multiple sub-router group - r6 (grouped from r5)
-	rw.r.WriteString("POST /moo/foo/foo/bar HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with subrouter grouping.")
-		t.FailNow()
-	}
-
-	// testing multiple sub-router group - r6 (grouped from r5) to serve files
-	rw.r.WriteString("GET /moo/foo/foo/static/router.go HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
-	if err := resp.Read(br); err != nil {
-		t.Fatalf("Unexpected error when reading response: %s", err)
-	}
-	if !(resp.Header.StatusCode() == fasthttp.StatusOK && barHit) {
-		t.Errorf("Chained routing failed with subrouter grouping.")
-		t.FailNow()
-	}
-
-	rw.r.WriteString("POST /qax HTTP/1.1\r\n\r\n")
-	go func() {
-		ch <- s.ServeConn(rw)
-	}()
-	select {
-	case err := <-ch:
-		if err != nil {
-			t.Fatalf("return error %s", err)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("timeout")
-	}
 	if err := resp.Read(br); err != nil {
 		t.Fatalf("Unexpected error when reading response: %s", err)
 	}
@@ -1089,6 +997,59 @@ func TestRouterServeFiles(t *testing.T) {
 	}
 	if resp.Header.StatusCode() != 200 {
 		t.Fatalf("Unexpected status code %d. Expected %d", resp.Header.StatusCode(), 423)
+	}
+	if !bytes.Equal(resp.Body(), body) {
+		t.Fatalf("Unexpected body %q. Expected %q", resp.Body(), string(body))
+	}
+}
+
+func TestRouterServeFilesCustom(t *testing.T) {
+	r := New()
+
+	root := os.TempDir()
+
+	fs := &fasthttp.FS{
+		Root: root,
+	}
+
+	recv := catchPanic(func() {
+		r.ServeFilesCustom("/noFilepath", fs)
+	})
+	if recv == nil {
+		t.Fatal("registering path not ending with '*filepath' did not panic")
+	}
+	body := []byte("fake ico")
+	ioutil.WriteFile(root+"/favicon.ico", body, 0644)
+
+	r.ServeFilesCustom("/*filepath", fs)
+
+	s := &fasthttp.Server{
+		Handler: r.Handler,
+	}
+
+	rw := &readWriter{}
+	ch := make(chan error)
+
+	rw.r.WriteString(string("GET /favicon.ico HTTP/1.1\r\n\r\n"))
+	go func() {
+		ch <- s.ServeConn(rw)
+	}()
+	select {
+	case err := <-ch:
+		if err != nil {
+			t.Fatalf("return error %s", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timeout")
+	}
+
+	br := bufio.NewReader(&rw.w)
+	var resp fasthttp.Response
+	if err := resp.Read(br); err != nil {
+		t.Fatalf("Unexpected error when reading response: %s", err)
+	}
+	if resp.Header.StatusCode() != 200 {
+		t.Fatalf("Unexpected status code %d. Expected %d", resp.Header.StatusCode(), 200)
 	}
 	if !bytes.Equal(resp.Body(), body) {
 		t.Fatalf("Unexpected body %q. Expected %q", resp.Body(), string(body))
