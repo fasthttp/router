@@ -8,6 +8,8 @@ package router
 import (
 	"runtime"
 	"testing"
+
+	"github.com/valyala/fasthttp"
 )
 
 var cleanTests = []struct {
@@ -87,6 +89,33 @@ func TestPathCleanMallocs(t *testing.T) {
 		allocs := testing.AllocsPerRun(100, func() { CleanPath(test.result) })
 		if allocs > 0 {
 			t.Errorf("CleanPath(%q): %v allocs, want zero", test.result, allocs)
+		}
+	}
+}
+
+func TestGetOptionalPath(t *testing.T) {
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	}
+
+	expectedPaths := []string{
+		"/show/:name/",
+		"/show/:name/:surname/",
+		"/show/:name/:surname/at/",
+		"/show/:name/:surname/at/:address/",
+		"/show/:name/:surname/at/:address/:id/",
+		"/show/:name/:surname/at/:address/:id/:phone/",
+	}
+	r := New()
+	r.GET("/show/:name/:surname?/at/:address?/:id/:phone?", handler)
+
+	for _, path := range expectedPaths {
+		ctx := new(fasthttp.RequestCtx)
+
+		h, _ := r.Lookup("GET", path, ctx)
+
+		if h == nil {
+			t.Errorf("Expected optional path '%s' is not registered", path)
 		}
 	}
 }

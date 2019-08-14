@@ -14,8 +14,28 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+const (
+	static nodeType = iota // default
+	root
+	param
+	catchAll
+)
+
+type nodeType uint8
+
 type buffer struct {
 	b []byte
+}
+
+type node struct {
+	path      string
+	wildChild bool
+	nType     nodeType
+	maxParams uint8
+	indices   string
+	children  []*node
+	handle    fasthttp.RequestHandler
+	priority  uint32
 }
 
 var bufferPool = sync.Pool{
@@ -55,24 +75,20 @@ func countParams(path string) uint8 {
 	return uint8(n)
 }
 
-type nodeType uint8
-
-const (
-	static nodeType = iota // default
-	root
-	param
-	catchAll
-)
-
-type node struct {
-	path      string
-	wildChild bool
-	nType     nodeType
-	maxParams uint8
-	indices   string
-	children  []*node
-	handle    fasthttp.RequestHandler
-	priority  uint32
+// shift bytes in array by n bytes left
+func shiftNRuneBytes(rb [4]byte, n int) [4]byte {
+	switch n {
+	case 0:
+		return rb
+	case 1:
+		return [4]byte{rb[1], rb[2], rb[3], 0}
+	case 2:
+		return [4]byte{rb[2], rb[3]}
+	case 3:
+		return [4]byte{rb[3]}
+	default:
+		return [4]byte{}
+	}
 }
 
 // increments priority of the given child and reorders if necessary
@@ -480,22 +496,6 @@ func (n *node) findCaseInsensitivePath(path string, fixTrailingSlash bool) ([]by
 	releaseBuffer(buff)
 
 	return fixedPath, found
-}
-
-// shift bytes in array by n bytes left
-func shiftNRuneBytes(rb [4]byte, n int) [4]byte {
-	switch n {
-	case 0:
-		return rb
-	case 1:
-		return [4]byte{rb[1], rb[2], rb[3], 0}
-	case 2:
-		return [4]byte{rb[2], rb[3]}
-	case 3:
-		return [4]byte{rb[3]}
-	default:
-		return [4]byte{}
-	}
 }
 
 // recursive case-insensitive lookup function used by n.findCaseInsensitivePath

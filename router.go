@@ -159,14 +159,10 @@ func New() *Router {
 // Group returns a new grouped Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Router {
-	g := &Router{
-		parent:                 r,
-		beginPath:              path,
-		RedirectTrailingSlash:  true,
-		RedirectFixedPath:      true,
-		HandleMethodNotAllowed: true,
-		HandleOPTIONS:          true,
-	}
+	g := New()
+	g.parent = r
+	g.beginPath = path
+
 	return g
 }
 
@@ -203,36 +199,6 @@ func (r *Router) PATCH(path string, handle fasthttp.RequestHandler) {
 // DELETE is a shortcut for router.Handle("DELETE", path, handle)
 func (r *Router) DELETE(path string, handle fasthttp.RequestHandler) {
 	r.Handle("DELETE", path, handle)
-}
-
-// returns all possible paths when the original path has optional arguments
-func getOptionalPaths(path string) []string {
-	paths := make([]string, 0)
-
-	index := 0
-	newParam := false
-	for i := 0; i < len(path); i++ {
-		c := path[i]
-
-		if c == ':' {
-			index = i
-			newParam = true
-		} else if i > 0 && newParam && c == '?' {
-			p := strings.Replace(path[:index], "?", "", -1)
-			if !gotils.StringSliceInclude(paths, p) {
-				paths = append(paths, p)
-			}
-
-			p = strings.Replace(path[:i], "?", "", -1) + "/"
-			if !gotils.StringSliceInclude(paths, p) {
-				paths = append(paths, p)
-			}
-
-			newParam = false
-		}
-	}
-
-	return paths
 }
 
 // Handle registers a new request handle with the given path and method.
@@ -344,12 +310,6 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	})
 }
 
-func (r *Router) recv(ctx *fasthttp.RequestCtx) {
-	if rcv := recover(); rcv != nil {
-		r.PanicHandler(ctx, rcv)
-	}
-}
-
 // Lookup allows the manual lookup of a method + path combo.
 // This is e.g. useful to build a framework around this router.
 // If the path was found, it returns the handle function and the path parameter
@@ -360,44 +320,6 @@ func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp
 		return root.getValue(path, ctx)
 	}
 	return nil, false
-}
-
-func (r *Router) allowed(path, reqMethod string) (allow string) {
-	if path == "*" || path == "/*" { // server-wide
-		for method := range r.trees {
-			if method == "OPTIONS" {
-				continue
-			}
-
-			// add request method to list of allowed methods
-			if len(allow) == 0 {
-				allow = method
-			} else {
-				allow += ", " + method
-			}
-		}
-	} else { // specific path
-		for method := range r.trees {
-			// Skip the requested method - we already tried this one
-			if method == reqMethod || method == "OPTIONS" {
-				continue
-			}
-
-			handle, _ := r.trees[method].getValue(path, nil)
-			if handle != nil {
-				// add request method to list of allowed methods
-				if len(allow) == 0 {
-					allow = method
-				} else {
-					allow += ", " + method
-				}
-			}
-		}
-	}
-	if len(allow) > 0 {
-		allow += ", OPTIONS"
-	}
-	return
 }
 
 // Handler makes the router implement the fasthttp.ListenAndServe interface.
@@ -493,5 +415,49 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		r.NotFound(ctx)
 	} else {
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound), fasthttp.StatusNotFound)
+	}
+}
+
+func (r *Router) allowed(path, reqMethod string) (allow string) {
+	if path == "*" || path == "/*" { // server-wide
+		for method := range r.trees {
+			if method == "OPTIONS" {
+				continue
+			}
+
+			// add request method to list of allowed methods
+			if len(allow) == 0 {
+				allow = method
+			} else {
+				allow += ", " + method
+			}
+		}
+	} else { // specific path
+		for method := range r.trees {
+			// Skip the requested method - we already tried this one
+			if method == reqMethod || method == "OPTIONS" {
+				continue
+			}
+
+			handle, _ := r.trees[method].getValue(path, nil)
+			if handle != nil {
+				// add request method to list of allowed methods
+				if len(allow) == 0 {
+					allow = method
+				} else {
+					allow += ", " + method
+				}
+			}
+		}
+	}
+	if len(allow) > 0 {
+		allow += ", OPTIONS"
+	}
+	return
+}
+
+func (r *Router) recv(ctx *fasthttp.RequestCtx) {
+	if rcv := recover(); rcv != nil {
+		r.PanicHandler(ctx, rcv)
 	}
 }

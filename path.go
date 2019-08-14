@@ -6,6 +6,7 @@
 package router
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/savsgio/gotils"
@@ -141,4 +142,34 @@ func cleanPathWithBuffer(cpb *cleanPathBuffer, path string) {
 	}
 
 	cpb.buf = cpb.buf[:cpb.w]
+}
+
+// returns all possible paths when the original path has optional arguments
+func getOptionalPaths(path string) []string {
+	paths := make([]string, 0)
+
+	index := 0
+	newParam := false
+	for i := 0; i < len(path); i++ {
+		c := path[i]
+
+		if c == ':' {
+			index = i
+			newParam = true
+		} else if i > 0 && newParam && c == '?' {
+			p := strings.Replace(path[:index], "?", "", -1)
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			p = strings.Replace(path[:i], "?", "", -1) + "/"
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			newParam = false
+		}
+	}
+
+	return paths
 }
