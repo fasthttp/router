@@ -91,9 +91,10 @@ var (
 // Router is a http.Handler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
-	parent    *Router
-	beginPath string
-	trees     map[string]*node
+	parent          *Router
+	beginPath       string
+	trees           map[string]*node
+	registeredPaths map[string][]string
 
 	// Enables automatic redirection if the current route can't be matched but a
 	// handler for the path with (without) the trailing slash exists.
@@ -149,6 +150,8 @@ type Router struct {
 func New() *Router {
 	return &Router{
 		beginPath:              "/",
+		trees:                  make(map[string]*node),
+		registeredPaths:        make(map[string][]string),
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
@@ -223,15 +226,13 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 		return
 	}
 
-	if r.trees == nil {
-		r.trees = make(map[string]*node)
-	}
-
 	root := r.trees[method]
 	if root == nil {
 		root = new(node)
 		r.trees[method] = root
 	}
+
+	r.registeredPaths[method] = append(r.registeredPaths[method], path)
 
 	optionalPaths := getOptionalPaths(path)
 
@@ -308,18 +309,6 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	r.GET(path, func(ctx *fasthttp.RequestCtx) {
 		fileHandler(ctx)
 	})
-}
-
-// Lookup allows the manual lookup of a method + path combo.
-// This is e.g. useful to build a framework around this router.
-// If the path was found, it returns the handle function and the path parameter
-// values. Otherwise the third return value indicates whether a redirection to
-// the same path with an extra / without the trailing slash should be performed.
-func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
-	if root := r.trees[method]; root != nil {
-		return root.getValue(path, ctx)
-	}
-	return nil, false
 }
 
 // Handler makes the router implement the fasthttp.ListenAndServe interface.
@@ -416,6 +405,23 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	} else {
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound), fasthttp.StatusNotFound)
 	}
+}
+
+// Lookup allows the manual lookup of a method + path combo.
+// This is e.g. useful to build a framework around this router.
+// If the path was found, it returns the handle function and the path parameter
+// values. Otherwise the third return value indicates whether a redirection to
+// the same path with an extra / without the trailing slash should be performed.
+func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+	if root := r.trees[method]; root != nil {
+		return root.getValue(path, ctx)
+	}
+	return nil, false
+}
+
+// List returns all registered routes grouped by method
+func (r *Router) List() map[string][]string {
+	return r.registeredPaths
 }
 
 func (r *Router) allowed(path, reqMethod string) (allow string) {

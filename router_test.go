@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1027,6 +1028,30 @@ func TestRouterServeFilesCustom(t *testing.T) {
 	if !bytes.Equal(resp.Body(), body) {
 		t.Fatalf("Unexpected body %q. Expected %q", resp.Body(), string(body))
 	}
+}
+
+func TestRouterList(t *testing.T) {
+	expected := map[string][]string{
+		"GET":    []string{"/bar"},
+		"PATCH":  []string{"/foo"},
+		"POST":   []string{"/v1/users/:name/:surname?"},
+		"DELETE": []string{"/v1/users/:id?"},
+	}
+
+	r := New()
+	r.GET("/bar", func(ctx *fasthttp.RequestCtx) {})
+	r.PATCH("/foo", func(ctx *fasthttp.RequestCtx) {})
+
+	v1 := r.Group("/v1")
+	v1.POST("/users/:name/:surname?", func(ctx *fasthttp.RequestCtx) {})
+	v1.DELETE("/users/:id?", func(ctx *fasthttp.RequestCtx) {})
+
+	result := r.List()
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Router.List() == %v, want %v", result, expected)
+	}
+
 }
 
 type readWriter struct {
