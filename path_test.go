@@ -99,12 +99,12 @@ func TestGetOptionalPath(t *testing.T) {
 	}
 
 	expectedPaths := []string{
-		"/show/:name/",
-		"/show/:name/:surname/",
-		"/show/:name/:surname/at/",
-		"/show/:name/:surname/at/:address/",
-		"/show/:name/:surname/at/:address/:id/",
-		"/show/:name/:surname/at/:address/:id/:phone/",
+		"/show/:name",
+		"/show/:name/:surname",
+		"/show/:name/:surname/at",
+		"/show/:name/:surname/at/:address",
+		"/show/:name/:surname/at/:address/:id",
+		"/show/:name/:surname/at/:address/:id/:phone",
 	}
 	r := New()
 	r.GET("/show/:name/:surname?/at/:address?/:id/:phone?", handler)

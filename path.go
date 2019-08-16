@@ -158,11 +158,12 @@ func getOptionalPaths(path string) []string {
 			newParam = true
 		} else if i > 0 && newParam && c == '?' {
 			p := strings.Replace(path[:index], "?", "", -1)
+			p = p[:len(p)-1]
 			if !gotils.StringSliceInclude(paths, p) {
 				paths = append(paths, p)
 			}
 
-			p = strings.Replace(path[:i], "?", "", -1) + "/"
+			p = strings.Replace(path[:i], "?", "", -1)
 			if !gotils.StringSliceInclude(paths, p) {
 				paths = append(paths, p)
 			}
