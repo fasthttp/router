@@ -216,9 +216,12 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 	if path[0] != '/' {
 		panic("path must begin with '/' in path '" + path + "'")
 	}
+
 	if r.beginPath != "/" {
 		path = r.beginPath + path
 	}
+
+	r.registeredPaths[method] = append(r.registeredPaths[method], path)
 
 	// Call to the parent recursively until main router to register paths in it
 	if r.parent != nil {
@@ -231,8 +234,6 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 		root = new(node)
 		r.trees[method] = root
 	}
-
-	r.registeredPaths[method] = append(r.registeredPaths[method], path)
 
 	optionalPaths := getOptionalPaths(path)
 
