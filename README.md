@@ -218,3 +218,9 @@ But this approach sidesteps the strict core rules of this router to avoid routin
 If the Router is a bit too minimalistic for you, you might try one of the following more high-level 3rd-party web frameworks building upon the Router package:
 
 - [Atreugo](https://github.com/savsgio/atreugo)
+
+## Metrics exporters
+
+If you want to aggregate any metrics, you might try one of the following metrics exporters developed for the Router package:
+
+- [Mnwa/fasthttprouter-prometheus](https://github.com/Mnwa/fasthttprouter-prometheus)
