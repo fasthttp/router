@@ -10,25 +10,25 @@
 //
 //  import (
 //      "fmt"
-//      "github.com/julienschmidt/httprouter"
-//      "net/http"
 //      "log"
+
+//      "github.com/fasthttp/router"
 //  )
 //
-//  func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+//  func Index(ctx *fasthttp.RequestCtx) {
 //      fmt.Fprint(w, "Welcome!\n")
 //  }
 //
-//  func Hello(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-//      fmt.Fprintf(w, "hello, %s!\n", ps.ByName("name"))
+//  func Hello(ctx *fasthttp.RequestCtx) {
+//      fmt.Fprintf(w, "hello, %s!\n", ctx.UserValue("name"))
 //  }
 //
 //  func main() {
-//      router := httprouter.New()
-//      router.GET("/", Index)
-//      router.GET("/hello/:name", Hello)
+//      r := router.New()
+//      r.GET("/", Index)
+//      r.GET("/hello/:name", Hello)
 //
-//      log.Fatal(http.ListenAndServe(":8080", router))
+//      log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 //  }
 //
 // The router matches incoming requests by the request method and the path.
@@ -64,19 +64,15 @@
 //   /files/templates/article.html       match: filepath="/templates/article.html"
 //   /files                              no match, but the router would redirect
 //
-// The value of parameters is saved as a slice of the Param struct, consisting
+// The value of parameters is saved in ctx.UserValue(<key>), consisting
 // each of a key and a value. The slice is passed to the Handle func as a third
 // parameter.
-// There are two ways to retrieve the value of a parameter:
-//  // by the name of the parameter
-//  user := ps.ByName("user") // defined by :user or *user
-//
-//  // by the index of the parameter. This way you can also get the name (key)
-//  thirdKey   := ps[2].Key   // the name of the 3rd parameter
-//  thirdValue := ps[2].Value // the value of the 3rd parameter
+// To retrieve the value of a parameter,gets by the name of the parameter
+//  user := ctx.UserValue("user") // defined by :user or *user
 package router
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/savsgio/gotils"
@@ -89,11 +85,11 @@ var (
 	questionMark       = []byte("?")
 )
 
-// MatchedRoutePathParam is the Param name under which the path of the matched
+// MatchedRoutePathParam is the param name under which the path of the matched
 // route is stored, if Router.SaveMatchedRoutePath is set.
-var MatchedRoutePathParam = "$matchedRoutePath"
+var MatchedRoutePathParam = fmt.Sprintf("__matchedRoutePath:%s__", gotils.RandBytes(make([]byte, 15)))
 
-// Router is a http.Handler which can be used to dispatch requests to different
+// Router is a fasthttp.RequestHandler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
 	parent          *Router
@@ -102,7 +98,7 @@ type Router struct {
 
 	trees map[string]*node
 
-	// If enabled, adds the matched route path onto the http.Request context
+	// If enabled, adds the matched route path onto the ctx.UserValue context
 	// before invoking the handler.
 	// The matched route path is only added to handlers of routes that were
 	// registered when this option was enabled.
@@ -138,7 +134,7 @@ type Router struct {
 	// Custom OPTIONS handlers take priority over automatic replies.
 	HandleOPTIONS bool
 
-	// An optional http.Handler that is called on automatic OPTIONS requests.
+	// An optional fasthttp.RequestHandler that is called on automatic OPTIONS requests.
 	// The handler is only called if HandleOPTIONS is true and no OPTIONS
 	// handler for the specific path was set.
 	// The "Allowed" header is set before calling the handler.
@@ -147,13 +143,13 @@ type Router struct {
 	// Cached value of global (*) allowed methods
 	globalAllowed string
 
-	// Configurable http.Handler which is called when no matching route is
-	// found. If it is not set, http.NotFound is used.
+	// Configurable fasthttp.RequestHandler which is called when no matching route is
+	// found. If it is not set, default NotFound is used.
 	NotFound fasthttp.RequestHandler
 
-	// Configurable http.Handler which is called when a request
+	// Configurable fasthttp.RequestHandler which is called when a request
 	// cannot be routed and HandleMethodNotAllowed is true.
-	// If it is not set, http.Error with http.StatusMethodNotAllowed is used.
+	// If it is not set, ctx.Error with fasthttp.StatusMethodNotAllowed is used.
 	// The "Allow" header with allowed request methods is set before the handler
 	// is called.
 	MethodNotAllowed fasthttp.RequestHandler
@@ -165,9 +161,6 @@ type Router struct {
 	// unrecovered panics.
 	PanicHandler func(*fasthttp.RequestCtx, interface{})
 }
-
-// Make sure the Router conforms with the http.Handler interface
-// var _ http.Handler = New()
 
 // New returns a new initialized Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
@@ -200,37 +193,37 @@ func (r *Router) saveMatchedRoutePath(path string, handle fasthttp.RequestHandle
 	}
 }
 
-// GET is a shortcut for router.Handle(http.MethodGet, path, handle)
+// GET is a shortcut for router.Handle(fasthttp.MethodGet, path, handle)
 func (r *Router) GET(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodGet, path, handle)
 }
 
-// HEAD is a shortcut for router.Handle(http.MethodHead, path, handle)
+// HEAD is a shortcut for router.Handle(fasthttp.MethodHead, path, handle)
 func (r *Router) HEAD(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodHead, path, handle)
 }
 
-// OPTIONS is a shortcut for router.Handle(http.MethodOptions, path, handle)
+// OPTIONS is a shortcut for router.Handle(fasthttp.MethodOptions, path, handle)
 func (r *Router) OPTIONS(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodOptions, path, handle)
 }
 
-// POST is a shortcut for router.Handle(http.MethodPost, path, handle)
+// POST is a shortcut for router.Handle(fasthttp.MethodPost, path, handle)
 func (r *Router) POST(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodPost, path, handle)
 }
 
-// PUT is a shortcut for router.Handle(http.MethodPut, path, handle)
+// PUT is a shortcut for router.Handle(fasthttp.MethodPut, path, handle)
 func (r *Router) PUT(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodPut, path, handle)
 }
 
-// PATCH is a shortcut for router.Handle(http.MethodPatch, path, handle)
+// PATCH is a shortcut for router.Handle(fasthttp.MethodPatch, path, handle)
 func (r *Router) PATCH(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodPatch, path, handle)
 }
 
-// DELETE is a shortcut for router.Handle(http.MethodDelete, path, handle)
+// DELETE is a shortcut for router.Handle(fasthttp.MethodDelete, path, handle)
 func (r *Router) DELETE(path string, handle fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodDelete, path, handle)
 }
@@ -307,6 +300,15 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 // To use the operating system's file system implementation,
 // use http.Dir:
 //     router.ServeFiles("/src/*filepath", http.Dir("/var/www"))
+
+// ServeFiles serves files from the given file system root.
+// The path must end with "/*filepath", files are then served from the local
+// path /defined/root/dir/*filepath.
+// For example if root is "/etc" and *filepath is "passwd", the local file
+// "/etc/passwd" would be served.
+// Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
+// Use:
+//     router.ServeFiles("/src/*filepath", "./")
 func (r *Router) ServeFiles(path string, rootPath string) {
 	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
 		panic("path must end with /*filepath in path '" + path + "'")
@@ -334,8 +336,9 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 // path /defined/root/dir/*filepath.
 // For example if root is "/etc" and *filepath is "passwd", the local file
 // "/etc/passwd" would be served.
-// Internally a http.FileServer is used, therefore http.NotFound is used instead
+// Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // of the Router's NotFound handler.
+// Use:
 //     router.ServeFilesCustom("/src/*filepath", *customFS)
 func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {

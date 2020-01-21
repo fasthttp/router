@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -259,7 +258,7 @@ func TestRouterChaining(t *testing.T) {
 	ctx.Request.SetRequestURI("/bar")
 	router1.Handler(ctx)
 
-	if !(ctx.Response.StatusCode() == http.StatusOK && barHit) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusOK && barHit) {
 		t.Errorf("Chained routing failed with router chaining.")
 		t.FailNow()
 	}
@@ -268,7 +267,7 @@ func TestRouterChaining(t *testing.T) {
 	ctx.Request.SetRequestURI("/qax")
 	router1.Handler(ctx)
 
-	if !(ctx.Response.StatusCode() == http.StatusNotFound) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound) {
 		t.Errorf("NotFound behavior failed with router chaining.")
 		t.FailNow()
 	}
@@ -390,7 +389,7 @@ func TestRouterOPTIONS(t *testing.T) {
 	ctx.Request.Header.SetMethod(fasthttp.MethodOptions)
 	ctx.Request.SetRequestURI("/doesnotexist")
 	router.Handler(ctx)
-	if !(ctx.Response.StatusCode() == http.StatusNotFound) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound) {
 		t.Errorf("OPTIONS handling failed: Code=%d, Header=%v", ctx.Response.StatusCode(), ctx.Response.Header.String())
 	}
 
@@ -537,7 +536,7 @@ func TestRouterNotFound(t *testing.T) {
 	// Test custom not found handler
 	var notFound bool
 	router.NotFound = func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(http.StatusNotFound)
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		notFound = true
 	}
 
@@ -556,7 +555,7 @@ func TestRouterNotFound(t *testing.T) {
 	ctx.Request.SetRequestURI("/path/?key=val")
 	ctx.Request.SetHost(host)
 	router.Handler(ctx)
-	if !(ctx.Response.StatusCode() == http.StatusPermanentRedirect && string(ctx.Response.Header.Peek("Location")) == buildLocation("/path?key=val")) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusPermanentRedirect && string(ctx.Response.Header.Peek("Location")) == buildLocation("/path?key=val")) {
 		t.Errorf("Custom NotFound handler failed: Code=%d, Header=%v", ctx.Response.StatusCode(), ctx.Response.Header.String())
 	}
 	ctx.Response.Reset()
@@ -568,7 +567,7 @@ func TestRouterNotFound(t *testing.T) {
 	ctx.Request.Header.SetMethod(fasthttp.MethodPatch)
 	ctx.Request.SetRequestURI("/")
 	router.Handler(ctx)
-	if !(ctx.Response.StatusCode() == http.StatusNotFound) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound) {
 		t.Errorf("NotFound handling route / failed: Code=%d", ctx.Response.StatusCode())
 	}
 }
@@ -581,7 +580,7 @@ func TestRouterPanicHandler(t *testing.T) {
 		panicHandled = true
 	}
 
-	router.Handle(http.MethodPut, "/user/:name", func(ctx *fasthttp.RequestCtx) {
+	router.Handle(fasthttp.MethodPut, "/user/:name", func(ctx *fasthttp.RequestCtx) {
 		panic("oops!")
 	})
 
@@ -709,9 +708,9 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 
 	router := New()
 	router.SaveMatchedRoutePath = true
-	router.Handle(http.MethodGet, route1, handle1)
-	router.Handle(http.MethodGet, route2, handle2)
-	router.Handle(http.MethodGet, route3, handle3)
+	router.Handle(fasthttp.MethodGet, route1, handle1)
+	router.Handle(fasthttp.MethodGet, route2, handle2)
+	router.Handle(fasthttp.MethodGet, route3, handle3)
 
 	ctx := new(fasthttp.RequestCtx)
 
@@ -835,13 +834,13 @@ func BenchmarkAllowed(b *testing.B) {
 	b.Run("Global", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_ = router.allowed("*", http.MethodOptions)
+			_ = router.allowed("*", fasthttp.MethodOptions)
 		}
 	})
 	b.Run("Path", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_ = router.allowed("/path", http.MethodOptions)
+			_ = router.allowed("/path", fasthttp.MethodOptions)
 		}
 	})
 }
