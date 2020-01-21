@@ -6,15 +6,15 @@
 package router
 
 import (
-	"runtime"
+	"strings"
 	"testing"
-
-	"github.com/valyala/fasthttp"
 )
 
-var cleanTests = []struct {
+type cleanPathTest struct {
 	path, result string
-}{
+}
+
+var cleanTests = []cleanPathTest{
 	// Already clean
 	{"/", "/"},
 	{"/abc", "/abc"},
@@ -24,6 +24,7 @@ var cleanTests = []struct {
 
 	// missing root
 	{"", "/"},
+	{"a/", "/a/"},
 	{"abc", "/abc"},
 	{"abc/def", "/abc/def"},
 	{"a/b/c", "/a/b/c"},
@@ -68,10 +69,10 @@ var cleanTests = []struct {
 func TestPathClean(t *testing.T) {
 	for _, test := range cleanTests {
 		if s := CleanPath(test.path); s != test.result {
-			t.Errorf("CleanPath(%s) = %s, want %s", test.path, s, test.result)
+			t.Errorf("CleanPath(%q) = %q, want %q", test.path, s, test.result)
 		}
 		if s := CleanPath(test.result); s != test.result {
-			t.Errorf("CleanPath(%s) = %s, want %s", test.result, s, test.result)
+			t.Errorf("CleanPath(%q) = %q, want %q", test.result, s, test.result)
 		}
 	}
 }
@@ -79,10 +80,6 @@ func TestPathClean(t *testing.T) {
 func TestPathCleanMallocs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping malloc count in short mode")
-	}
-	if runtime.GOMAXPROCS(0) > 1 {
-		t.Log("skipping AllocsPerRun checks; GOMAXPROCS>1")
-		return
 	}
 
 	for _, test := range cleanTests {
@@ -93,47 +90,59 @@ func TestPathCleanMallocs(t *testing.T) {
 	}
 }
 
-func TestGetOptionalPath(t *testing.T) {
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
+func BenchmarkPathClean(b *testing.B) {
+	b.ReportAllocs()
 
-	expectedPaths := []string{
-		"/show/:name",
-		"/show/:name/:surname",
-		"/show/:name/:surname/at",
-		"/show/:name/:surname/at/:address",
-		"/show/:name/:surname/at/:address/:id",
-		"/show/:name/:surname/at/:address/:id/:phone",
-	}
-	r := New()
-	r.GET("/show/:name/:surname?/at/:address?/:id/:phone?", handler)
-
-	for _, path := range expectedPaths {
-		ctx := new(fasthttp.RequestCtx)
-
-		h, _ := r.Lookup("GET", path, ctx)
-
-		if h == nil {
-			t.Errorf("Expected optional path '%s' is not registered", path)
+	for i := 0; i < b.N; i++ {
+		for _, test := range cleanTests {
+			CleanPath(test.path)
 		}
 	}
 }
 
-func BenchmarkCleanPathWithBuffer(b *testing.B) {
-	path := "/../bench/"
-	cpb := acquireCleanPathBuffer()
+func genLongPaths() (testPaths []cleanPathTest) {
+	for i := 1; i <= 1234; i++ {
+		ss := strings.Repeat("a", i)
 
-	for i := 0; i < b.N; i++ {
-		cleanPathWithBuffer(cpb, path)
-		cpb.reset()
+		correctPath := "/" + ss
+		testPaths = append(testPaths, cleanPathTest{
+			path:   correctPath,
+			result: correctPath,
+		}, cleanPathTest{
+			path:   ss,
+			result: correctPath,
+		}, cleanPathTest{
+			path:   "//" + ss,
+			result: correctPath,
+		}, cleanPathTest{
+			path:   "/" + ss + "/b/..",
+			result: correctPath,
+		})
+	}
+	return
+}
+
+func TestPathCleanLong(t *testing.T) {
+	cleanTests := genLongPaths()
+
+	for _, test := range cleanTests {
+		if s := CleanPath(test.path); s != test.result {
+			t.Errorf("CleanPath(%q) = %q, want %q", test.path, s, test.result)
+		}
+		if s := CleanPath(test.result); s != test.result {
+			t.Errorf("CleanPath(%q) = %q, want %q", test.result, s, test.result)
+		}
 	}
 }
 
-func BenchmarkCleanPath(b *testing.B) {
-	path := "/../bench/"
+func BenchmarkPathCleanLong(b *testing.B) {
+	cleanTests := genLongPaths()
+	b.ResetTimer()
+	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		CleanPath(path)
+		for _, test := range cleanTests {
+			CleanPath(test.path)
+		}
 	}
 }

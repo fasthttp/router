@@ -39,5 +39,5 @@ func main() {
 	r.GET("/optional/:name?/:word?", MultiParams)
 	r.GET("/ping", QueryArgs)
 
-	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
+	log.Fatal(fasthttp.ListenAndServe(":8081", r.Handler))
 }
