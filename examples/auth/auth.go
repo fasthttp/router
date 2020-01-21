@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/elithrar/simple-scrypt"
+	scrypt "github.com/elithrar/simple-scrypt"
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
@@ -43,7 +43,7 @@ func parseBasicAuth(auth string) (username, password string, ok bool) {
 
 // BasicAuth is the basic auth handler
 func BasicAuth(h fasthttp.RequestHandler, requiredUser string, requiredPasswordHash []byte) fasthttp.RequestHandler {
-	return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
+	return func(ctx *fasthttp.RequestCtx) {
 		// Get the Basic Authentication credentials
 		user, password, hasAuth := basicAuth(ctx)
 
@@ -77,7 +77,7 @@ func BasicAuth(h fasthttp.RequestHandler, requiredUser string, requiredPasswordH
 		// Request Basic Authentication otherwise
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusUnauthorized), fasthttp.StatusUnauthorized)
 		ctx.Response.Header.Set("WWW-Authenticate", "Basic realm=Restricted")
-	})
+	}
 }
 
 // Index is the index handler
