@@ -87,7 +87,7 @@ var (
 
 // MatchedRoutePathParam is the param name under which the path of the matched
 // route is stored, if Router.SaveMatchedRoutePath is set.
-var MatchedRoutePathParam = fmt.Sprintf("__matchedRoutePath:%s__", gotils.RandBytes(make([]byte, 15)))
+var MatchedRoutePathParam = fmt.Sprintf("__matchedRoutePath::%s__", gotils.RandBytes(make([]byte, 15)))
 
 // Router is a fasthttp.RequestHandler which can be used to dispatch requests to different
 // handler functions via configurable routes
