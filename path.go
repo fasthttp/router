@@ -7,50 +7,14 @@ package router
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/savsgio/gotils"
 )
 
-type cleanPathBuffer struct {
-	n        int
-	r        int
-	w        int
-	trailing bool
-	buf      []byte
-}
-
-var cleanPathBufferPool = sync.Pool{
-	New: func() interface{} {
-		return &cleanPathBuffer{
-			n:        0,
-			r:        0,
-			w:        1,
-			trailing: false,
-			buf:      make([]byte, 140),
-		}
-	},
-}
-
-func (cpb *cleanPathBuffer) reset() {
-	cpb.n = 0
-	cpb.r = 0
-	cpb.w = 1
-	cpb.trailing = false
-	// cpb.buf = cpb.buf[:0]
-}
-
-func acquireCleanPathBuffer() *cleanPathBuffer {
-	return cleanPathBufferPool.Get().(*cleanPathBuffer)
-}
-
-func releaseCleanPathBuffer(cpb *cleanPathBuffer) {
-	cpb.reset()
-	cleanPathBufferPool.Put(cpb)
-}
+const stackBufSize = 128
 
 // CleanPath is the URL version of path.Clean, it returns a canonical URL path
-// for path, eliminating . and .. elements.
+// for p, eliminating . and .. elements.
 //
 // The following rules are applied iteratively until no further processing can
 // be done:
@@ -62,86 +26,133 @@ func releaseCleanPathBuffer(cpb *cleanPathBuffer) {
 //	   that is, replace "/.." by "/" at the beginning of a path.
 //
 // If the result of this process is an empty string, "/" is returned
-func CleanPath(path string) string {
-	cpb := acquireCleanPathBuffer()
-	cleanPathWithBuffer(cpb, path)
-
-	s := string(cpb.buf)
-	releaseCleanPathBuffer(cpb)
-
-	return s
-}
-
-func cleanPathWithBuffer(cpb *cleanPathBuffer, path string) {
+func CleanPath(p string) string {
 	// Turn empty string into "/"
-	if path == "" {
-		cpb.buf = append(cpb.buf[:0], '/')
-		return
+	if p == "" {
+		return "/"
 	}
 
-	cpb.n = len(path)
-	cpb.buf = gotils.ExtendByteSlice(cpb.buf, len(path)+1)
-	cpb.buf[0] = '/'
+	// Reasonably sized buffer on stack to avoid allocations in the common case.
+	// If a larger buffer is required, it gets allocated dynamically.
+	buf := make([]byte, 0, stackBufSize)
 
-	cpb.trailing = cpb.n > 2 && path[cpb.n-1] == '/'
+	n := len(p)
+
+	// Invariants:
+	//      reading from path; r is index of next byte to process.
+	//      writing to buf; w is index of next byte to write.
+
+	// path must start with '/'
+	r := 1
+	w := 1
+
+	if p[0] != '/' {
+		r = 0
+
+		if n+1 > stackBufSize {
+			buf = make([]byte, n+1)
+		} else {
+			buf = buf[:n+1]
+		}
+		buf[0] = '/'
+	}
+
+	trailing := n > 1 && p[n-1] == '/'
 
 	// A bit more clunky without a 'lazybuf' like the path package, but the loop
-	// gets completely inlined (bufApp). So in contrast to the path package this
-	// loop has no expensive function calls (except 1x make)
+	// gets completely inlined (bufApp calls).
+	// So in contrast to the path package this loop has no expensive function
+	// calls (except make, if needed).
 
-	for cpb.r < cpb.n {
-		// println(path[:cpb.r], " ####### ", string(path[cpb.r]), " ####### ", string(cpb.buf))
+	for r < n {
 		switch {
-		case path[cpb.r] == '/':
+		case p[r] == '/':
 			// empty path element, trailing slash is added after the end
-			cpb.r++
+			r++
 
-		case path[cpb.r] == '.' && cpb.r+1 == cpb.n:
-			cpb.trailing = true
-			cpb.r++
+		case p[r] == '.' && r+1 == n:
+			trailing = true
+			r++
 
-		case path[cpb.r] == '.' && path[cpb.r+1] == '/':
+		case p[r] == '.' && p[r+1] == '/':
 			// . element
-			cpb.r++
+			r += 2
 
-		case path[cpb.r] == '.' && path[cpb.r+1] == '.' && (cpb.r+2 == cpb.n || path[cpb.r+2] == '/'):
+		case p[r] == '.' && p[r+1] == '.' && (r+2 == n || p[r+2] == '/'):
 			// .. element: remove to last /
-			cpb.r += 2
+			r += 3
 
-			if cpb.w > 1 {
+			if w > 1 {
 				// can backtrack
-				cpb.w--
+				w--
 
-				for cpb.w > 1 && cpb.buf[cpb.w] != '/' {
-					cpb.w--
+				if len(buf) == 0 {
+					for w > 1 && p[w] != '/' {
+						w--
+					}
+				} else {
+					for w > 1 && buf[w] != '/' {
+						w--
+					}
 				}
-
 			}
 
 		default:
-			// real path element.
-			// add slash if needed
-			if cpb.w > 1 {
-				cpb.buf[cpb.w] = '/'
-				cpb.w++
+			// Real path element.
+			// Add slash if needed
+			if w > 1 {
+				bufApp(&buf, p, w, '/')
+				w++
 			}
 
-			// copy element
-			for cpb.r < cpb.n && path[cpb.r] != '/' {
-				cpb.buf[cpb.w] = path[cpb.r]
-				cpb.w++
-				cpb.r++
+			// Copy element
+			for r < n && p[r] != '/' {
+				bufApp(&buf, p, w, p[r])
+				w++
+				r++
 			}
 		}
 	}
 
-	// re-append trailing slash
-	if cpb.trailing && cpb.w > 1 {
-		cpb.buf[cpb.w] = '/'
-		cpb.w++
+	// Re-append trailing slash
+	if trailing && w > 1 {
+		bufApp(&buf, p, w, '/')
+		w++
 	}
 
-	cpb.buf = cpb.buf[:cpb.w]
+	// If the original string was not modified (or only shortened at the end),
+	// return the respective substring of the original string.
+	// Otherwise return a new string from the buffer.
+	if len(buf) == 0 {
+		return p[:w]
+	}
+	return string(buf[:w])
+}
+
+// Internal helper to lazily create a buffer if necessary.
+// Calls to this function get inlined.
+func bufApp(buf *[]byte, s string, w int, c byte) {
+	b := *buf
+	if len(b) == 0 {
+		// No modification of the original string so far.
+		// If the next character is the same as in the original string, we do
+		// not yet have to allocate a buffer.
+		if s[w] == c {
+			return
+		}
+
+		// Otherwise use either the stack buffer, if it is large enough, or
+		// allocate a new buffer on the heap, and copy all previous characters.
+		if l := len(s); l > cap(b) {
+			*buf = make([]byte, len(s))
+		} else {
+			*buf = (*buf)[:l]
+		}
+		b = *buf
+
+		copy(b, s[:w])
+	}
+	b[w] = c
 }
 
 // returns all possible paths when the original path has optional arguments
