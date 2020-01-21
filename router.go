@@ -295,17 +295,6 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 // path /defined/root/dir/*filepath.
 // For example if root is "/etc" and *filepath is "passwd", the local file
 // "/etc/passwd" would be served.
-// Internally a http.FileServer is used, therefore http.NotFound is used instead
-// of the Router's NotFound handler.
-// To use the operating system's file system implementation,
-// use http.Dir:
-//     router.ServeFiles("/src/*filepath", http.Dir("/var/www"))
-
-// ServeFiles serves files from the given file system root.
-// The path must end with "/*filepath", files are then served from the local
-// path /defined/root/dir/*filepath.
-// For example if root is "/etc" and *filepath is "passwd", the local file
-// "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // Use:
 //     router.ServeFiles("/src/*filepath", "./")
