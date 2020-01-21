@@ -5,6 +5,12 @@
 
 package router
 
+import (
+	"strings"
+
+	"github.com/savsgio/gotils"
+)
+
 // CleanPath is the URL version of path.Clean, it returns a canonical URL path
 // for p, eliminating . and .. elements.
 //
@@ -147,4 +153,35 @@ func bufApp(buf *[]byte, s string, w int, c byte) {
 		copy(b, s[:w])
 	}
 	b[w] = c
+}
+
+// returns all possible paths when the original path has optional arguments
+func getOptionalPaths(path string) []string {
+	paths := make([]string, 0)
+
+	index := 0
+	newParam := false
+	for i := 0; i < len(path); i++ {
+		c := path[i]
+
+		if c == ':' {
+			index = i
+			newParam = true
+		} else if i > 0 && newParam && c == '?' {
+			p := strings.Replace(path[:index], "?", "", -1)
+			p = p[:len(p)-1]
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			p = strings.Replace(path[:i], "?", "", -1)
+			if !gotils.StringSliceInclude(paths, p) {
+				paths = append(paths, p)
+			}
+
+			newParam = false
+		}
+	}
+
+	return paths
 }

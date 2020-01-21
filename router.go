@@ -78,7 +78,6 @@ package router
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/savsgio/gotils"
 	"github.com/valyala/bytebufferpool"
@@ -102,10 +101,11 @@ var MatchedRoutePathParam = "$matchedRoutePath"
 // Router is a http.Handler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
-	trees map[string]*node
+	parent          *Router
+	beginPath       string
+	registeredPaths map[string][]string
 
-	paramsPool sync.Pool
-	maxParams  uint16
+	trees map[string]*node
 
 	// If enabled, adds the matched route path onto the http.Request context
 	// before invoking the handler.
@@ -178,11 +178,23 @@ type Router struct {
 // Path auto-correction, including trailing slashes, is enabled by default.
 func New() *Router {
 	return &Router{
+		beginPath:              "/",
+		registeredPaths:        make(map[string][]string),
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
 		HandleMethodNotAllowed: true,
 		HandleOPTIONS:          true,
 	}
+}
+
+// Group returns a new grouped Router.
+// Path auto-correction, including trailing slashes, is enabled by default.
+func (r *Router) Group(path string) *Router {
+	g := New()
+	g.parent = r
+	g.beginPath = path
+
+	return g
 }
 
 func (r *Router) saveMatchedRoutePath(path string, handle Handle) Handle {
@@ -249,6 +261,18 @@ func (r *Router) Handle(method, path string, handle Handle) {
 		panic("handle must not be nil")
 	}
 
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
+
+	r.registeredPaths[method] = append(r.registeredPaths[method], path)
+
+	// Call to the parent recursively until main router to register paths in it
+	if r.parent != nil {
+		r.parent.Handle(method, path, handle)
+		return
+	}
+
 	if r.SaveMatchedRoutePath {
 		varsCount++
 		handle = r.saveMatchedRoutePath(path, handle)
@@ -266,11 +290,15 @@ func (r *Router) Handle(method, path string, handle Handle) {
 		r.globalAllowed = r.allowed("*", "")
 	}
 
-	root.addRoute(path, handle)
+	optionalPaths := getOptionalPaths(path)
 
-	// Update maxParams
-	if paramsCount := countParams(path); paramsCount+varsCount > r.maxParams {
-		r.maxParams = paramsCount + varsCount
+	// if not has optional paths, adds the original
+	if len(optionalPaths) == 0 {
+		root.addRoute(path, handle)
+	} else {
+		for _, p := range optionalPaths {
+			root.addRoute(p, handle)
+		}
 	}
 }
 
@@ -289,8 +317,52 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 		panic("path must end with /*filepath in path '" + path + "'")
 	}
 
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
+
+	if r.parent != nil {
+		r.parent.ServeFiles(path, rootPath)
+		return
+	}
+
 	prefix := path[:len(path)-10]
 	fileHandler := fasthttp.FSHandler(rootPath, strings.Count(prefix, "/"))
+
+	r.GET(path, func(ctx *fasthttp.RequestCtx) {
+		fileHandler(ctx)
+	})
+}
+
+// ServeFilesCustom serves files from the given file system settings.
+// The path must end with "/*filepath", files are then served from the local
+// path /defined/root/dir/*filepath.
+// For example if root is "/etc" and *filepath is "passwd", the local file
+// "/etc/passwd" would be served.
+// Internally a http.FileServer is used, therefore http.NotFound is used instead
+// of the Router's NotFound handler.
+//     router.ServeFilesCustom("/src/*filepath", *customFS)
+func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
+	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
+		panic("path must end with /*filepath in path '" + path + "'")
+	}
+
+	if r.beginPath != "/" {
+		path = r.beginPath + path
+	}
+
+	if r.parent != nil {
+		r.parent.ServeFilesCustom(path, fs)
+		return
+	}
+
+	prefix := path[:len(path)-10]
+	stripSlashes := strings.Count(prefix, "/")
+
+	if fs.PathRewrite == nil && stripSlashes > 0 {
+		fs.PathRewrite = fasthttp.NewPathSlashesStripper(stripSlashes)
+	}
+	fileHandler := fs.NewRequestHandler()
 
 	r.GET(path, func(ctx *fasthttp.RequestCtx) {
 		fileHandler(ctx)
@@ -461,4 +533,9 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	} else {
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound), fasthttp.StatusNotFound)
 	}
+}
+
+// List returns all registered routes grouped by method
+func (r *Router) List() map[string][]string {
+	return r.registeredPaths
 }
