@@ -1,25 +1,20 @@
 # Router
+
 [![Build Status](https://travis-ci.org/fasthttp/router.svg?branch=master)](https://travis-ci.org/fasthttp/router)
 [![Coverage Status](https://coveralls.io/repos/fasthttp/router/badge.svg?branch=master&service=github)](https://coveralls.io/github/fasthttp/router?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/fasthttp/router)](https://goreportcard.com/report/github.com/fasthttp/router)
 [![GoDoc](http://godoc.org/github.com/fasthttp/router?status.svg)](http://godoc.org/github.com/fasthttp/router)
 [![GitHub release](https://img.shields.io/github/release/fasthttp/router.svg)](https://github.com/fasthttp/router/releases)
 
-Router is forked from [httprouter](https://github.com/julienschmidt/httprouter) which is a lightweight high performance HTTP request router
-(also called *multiplexer* or just *mux* for short) for [fasthttp](https://github.com/valyala/fasthttp).
+Router is a lightweight high performance HTTP request router (also called _multiplexer_ or just _mux_ for short) for [fasthttp](https://github.com/valyala/fasthttp).
 
 This router is optimized for high performance and a small memory footprint. It scales well even with very long paths and a large number of routes. A compressing dynamic trie (radix tree) structure is used for efficient matching.
 
 #### License Related
 
+- This repo is based on [httprouter](https://github.com/julienschmidt/httprouter).
 - The author of `httprouter` [@julienschmidt](https://github.com/julienschmidt) did almost all the hard work of this router.
-- The author of `fasthttprouter` [@buaazp](https://github.com/buaazp) did all the hard work by porting `httprouter` to fasthttp.
-- We ([@buaazp](https://github.com/buaazp) and fasthttp ecosystem team) respect the laws of open source. So LICENSE of `httprouter` is alway stay here: [HttpRouterLicense](HttpRouterLicense).
-- What [@buaazp](https://github.com/buaazp) have done is just fit for `fasthttp`. I have no hope to build a huge but toxic go web framwork like [iris](https://github.com/kataras/iris).
-- [@buaazp](https://github.com/buaazp) forked `fasthttp` repo is just because there is no router for `fasthttp` at that time. And `fasthttprouter` is the FIRST router for `fasthttp`.
-- `fasthttprouter` has been used in huge production environments and processes hundreds of millions requests per day. It is fast and stable, so [@buaazp](https://github.com/buaazp) decide to release a stable version.
-- This repo is based on `fasthttprouter` and maintained by official fasthttp ecosystem team. We trying to optimize it even more and check if it works well when we update something huge in fasthttp.
-
+- We (fasthttp ecosystem team) respect the laws of open source. So LICENSE of `httprouter` is alway stay here: [HttpRouterLicense](HttpRouterLicense).
 
 ## Features
 
@@ -31,7 +26,7 @@ This router is optimized for high performance and a small memory footprint. It s
 
 - Concurrency Test (allocations): In 30 ms processing time, the tets result for 100, 1000, 5000 clients is:
 
-\* *Smaller is better*
+\* _Smaller is better_
 
 ![](https://raw.githubusercontent.com/smallnest/go-web-framework-benchmark/master/concurrency_alloc.png)
 
@@ -39,8 +34,8 @@ See below for technical details of the implementation.
 
 **Only explicit matches:** With other routers, like [http.ServeMux](http://golang.org/pkg/net/http/#ServeMux),
 a requested URL path could match multiple patterns. Therefore they have some
-awkward pattern priority rules, like *longest match* or *first registered,
-first matched*. By design of this router, a request can only match exactly one
+awkward pattern priority rules, like _longest match_ or _first registered,
+first matched_. By design of this router, a request can only match exactly one
 or no route. As a result, there are also no unintended matches, which makes it
 great for SEO and improves the user experience.
 
@@ -73,7 +68,7 @@ PanicHandler log what happened and deliver a nice error page.
 RESTful APIs. Moreover it has builtin native support for [OPTIONS requests](http://zacstewart.com/2012/04/14/http-options-method.html)
 and `405 Method Not Allowed` replies.
 
-Of course you can also set **custom [NotFound](http://godoc.org/github.com/fasthttp/router#Router.NotFound) and  [MethodNotAllowed](http://godoc.org/github.com/fasthttp/router#Router.MethodNotAllowed) handlers** and [**serve static files**](http://godoc.org/github.com/fasthttp/router#Router.ServeFiles).
+Of course you can also set **custom [NotFound](http://godoc.org/github.com/fasthttp/router#Router.NotFound) and [MethodNotAllowed](http://godoc.org/github.com/fasthttp/router#Router.MethodNotAllowed) handlers** and [**serve static files**](http://godoc.org/github.com/fasthttp/router#Router.ServeFiles).
 
 ## Usage
 
@@ -111,7 +106,7 @@ func main() {
 
 ### Named parameters
 
-As you can see, `:name` is a *named parameter*. The values are accessible via `RequestCtx.UserValues`. You can get the value of a parameter by using the `ctx.UserValue("name")`.
+As you can see, `:name` is a _named parameter_. The values are accessible via `RequestCtx.UserValues`. You can get the value of a parameter by using the `ctx.UserValue("name")`.
 
 Named parameters only match a single path segment:
 
@@ -127,11 +122,12 @@ Pattern: /user/:user
 **Note:** Since this router has only explicit matches, you can not register static routes and parameters for the same path segment. For example you can not register the patterns `/user/new` and `/user/:user` for the same request method at the same time. The routing of different request methods is independent from each other.
 
 #### Optional parameters
+
 If you need define an optional parameters, add `?` at the end of param name. `:name?`
 
 ### Catch-All parameters
 
-The second type are *catch-all* parameters and have the form `*name`.
+The second type are _catch-all_ parameters and have the form `*name`.
 Like the name suggests, they match everything.
 Therefore they must always be at the **end** of the pattern:
 
@@ -145,7 +141,7 @@ Pattern: /src/*filepath
 
 ## How does it work?
 
-The router relies on a tree structure which makes heavy use of *common prefixes*, it is basically a *compact* [*prefix tree*](https://en.wikipedia.org/wiki/Trie) (or just [*Radix tree*](https://en.wikipedia.org/wiki/Radix_tree)). Nodes with a common prefix also share a common parent. Here is a short example what the routing tree for the `GET` request method could look like:
+The router relies on a tree structure which makes heavy use of _common prefixes_, it is basically a _compact_ [_prefix tree_](https://en.wikipedia.org/wiki/Trie) (or just [_Radix tree_](https://en.wikipedia.org/wiki/Radix_tree)). Nodes with a common prefix also share a common parent. Here is a short example what the routing tree for the `GET` request method could look like:
 
 ```
 Priority   Path             Handle
@@ -161,7 +157,7 @@ Priority   Path             Handle
 1          └contact\        *<8>
 ```
 
-Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\:post\`, where `:post` is just a placeholder ([*parameter*](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `:post` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show][benchmark], this works very well and efficient.
+Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\:post\`, where `:post` is just a placeholder ([_parameter_](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `:post` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show][benchmark], this works very well and efficient.
 
 Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems. Moreover the router manages a separate tree for every request method. For one thing it is more space efficient than holding a method->handle map in every single node, for another thing is also allows us to greatly reduce the routing problem before even starting the look-up in the prefix-tree.
 
@@ -188,7 +184,7 @@ Fasthttp works with [RequestHandler](https://godoc.org/github.com/valyala/fastht
 
 Just try it out for yourself, the usage of Router is very straightforward. The package is compact and minimalistic, but also probably one of the easiest routers to set up.
 
-## Where can I find Middleware *X*?
+## Where can I find Middleware _X_?
 
 This package just provides a very efficient request router with a few extra features. The router is just a [`fasthttp.RequestHandler`](https://godoc.org/github.com/valyala/fasthttp#RequestHandler), you can chain any `fasthttp.RequestHandler` compatible middleware before the router. Or you could [just write your own](https://justinas.org/writing-http-middleware-in-go/), it's very easy!
 
@@ -204,6 +200,7 @@ Have a look at these middleware examples:
 You can use another [http.Handler](http://golang.org/pkg/net/http/#Handler), for example another router, to handle requests which could not be matched by this router by using the [Router.NotFound](http://godoc.org/github.com/fasthttp/router#Router.NotFound) handler. This allows chaining.
 
 ### Static files
+
 The `NotFound` handler can for example be used to serve static files from the root path `/` (like an index.html file along with other assets):
 
 ```go

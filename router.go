@@ -75,6 +75,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/fasthttp/router/radix"
 	"github.com/savsgio/gotils"
 	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
@@ -96,7 +97,7 @@ type Router struct {
 	beginPath       string
 	registeredPaths map[string][]string
 
-	trees map[string]*node
+	trees map[string]*radix.Tree
 
 	// If enabled, adds the matched route path onto the ctx.UserValue context
 	// before invoking the handler.
@@ -267,14 +268,13 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 	}
 
 	if r.trees == nil {
-		r.trees = make(map[string]*node)
+		r.trees = make(map[string]*radix.Tree)
 	}
 
 	root := r.trees[method]
 	if root == nil {
-		root = new(node)
+		root = radix.New()
 		r.trees[method] = root
-
 		r.globalAllowed = r.allowed("*", "")
 	}
 
@@ -282,10 +282,10 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 
 	// if not has optional paths, adds the original
 	if len(optionalPaths) == 0 {
-		root.addRoute(path, handle)
+		root.Add(path, handle)
 	} else {
 		for _, p := range optionalPaths {
-			root.addRoute(p, handle)
+			root.Add(p, handle)
 		}
 	}
 }
@@ -369,7 +369,7 @@ func (r *Router) recv(ctx *fasthttp.RequestCtx) {
 // the same path with an extra / without the trailing slash should be performed.
 func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 	if root := r.trees[method]; root != nil {
-		handle, tsr := root.getValue(path, ctx)
+		handle, tsr := root.Get(path, ctx)
 		if handle == nil {
 			return nil, tsr
 		}
@@ -402,7 +402,7 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 				continue
 			}
 
-			handle, _ := r.trees[method].getValue(path, nil)
+			handle, _ := r.trees[method].Get(path, nil)
 			if handle != nil {
 				// Add request method to list of allowed methods
 				allowed = append(allowed, method)
@@ -439,7 +439,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	method := gotils.B2S(ctx.Method())
 
 	if root := r.trees[method]; root != nil {
-		if handle, tsr := root.getValue(path, ctx); handle != nil {
+		if handle, tsr := root.Get(path, ctx); handle != nil {
 			handle(ctx)
 			return
 		} else if method != fasthttp.MethodConnect && path != "/" {
@@ -474,7 +474,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 			// Try to fix the request path
 			if r.RedirectFixedPath {
-				fixedPath, found := root.findCaseInsensitivePath(
+				fixedPath, found := root.FindCaseInsensitivePath(
 					CleanPath(path),
 					r.RedirectTrailingSlash,
 				)

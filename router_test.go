@@ -83,6 +83,15 @@ func assertWithTestServer(t *testing.T, uri string, handler fasthttp.RequestHand
 	fn(rw)
 }
 
+func catchPanic(testFunc func()) (recv interface{}) {
+	defer func() {
+		recv = recover()
+	}()
+
+	testFunc()
+	return
+}
+
 func TestRouter(t *testing.T) {
 	router := New()
 
@@ -497,23 +506,29 @@ func TestRouterNotFound(t *testing.T) {
 	router.GET("/path", handlerFunc)
 	router.GET("/dir/", handlerFunc)
 	router.GET("/", handlerFunc)
+	router.GET("/:proc/StaTus", handlerFunc)
+	router.GET("/USERS/:name/enTRies/", handlerFunc)
+	router.GET("/static/*filepath", handlerFunc)
 
 	testRoutes := []struct {
 		route    string
 		code     int
 		location string
 	}{
-		{"/path/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                   // TSR -/
-		{"/dir", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                     // TSR +/
-		{"", fasthttp.StatusOK, ""},                                                           // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/PATH", fasthttp.StatusMovedPermanently, buildLocation("/path")},                    // Fixed Case
-		{"/DIR/", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                    // Fixed Case
-		{"/PATH/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                   // Fixed Case -/
-		{"/DIR", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                     // Fixed Case +/
-		{"/paTh/?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")}, // Fixed Case With Params +/
-		{"/paTh?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")},  // Fixed Case With Params +/
-		{"/../path", fasthttp.StatusOK, ""},                                                   // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/nope", fasthttp.StatusNotFound, ""},                                                // NotFound
+		{"/path/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                   // TSR -/
+		{"/dir", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                     // TSR +/
+		{"", fasthttp.StatusOK, ""},                                                                           // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/PATH", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                    // Fixed Case
+		{"/DIR/", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                    // Fixed Case
+		{"/PATH/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                   // Fixed Case -/
+		{"/DIR", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                     // Fixed Case +/
+		{"/paTh/?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")},                 // Fixed Case With Query Params +/
+		{"/paTh?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")},                  // Fixed Case With Query Params +/
+		{"/../path", fasthttp.StatusOK, ""},                                                                   // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/nope", fasthttp.StatusNotFound, ""},                                                                // NotFound
+		{"/sergio/status/", fasthttp.StatusMovedPermanently, buildLocation("/sergio/StaTus")},                 // Fixed Case With Params -/
+		{"/users/atreugo/eNtriEs", fasthttp.StatusMovedPermanently, buildLocation("/USERS/atreugo/enTRies/")}, // Fixed Case With Params +/
+		{"/STatiC/test.go", fasthttp.StatusMovedPermanently, buildLocation("/static/test.go")},                // Fixed Case Wildcard
 	}
 
 	for _, tr := range testRoutes {
@@ -849,13 +864,13 @@ func BenchmarkRouterGet(b *testing.B) {
 	resp := []byte("Bench GET")
 
 	r := New()
-	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {
+	r.GET("/", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.SetRequestURI("/bench")
+	ctx.Request.SetRequestURI("/")
 
 	for i := 0; i < b.N; i++ {
 		r.Handler(ctx)

@@ -1,27 +1,13 @@
-// Copyright 2013 Julien Schmidt. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be found
-// in the LICENSE file.
-
-package router
+package radix
 
 import (
 	"fmt"
-	"regexp"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/valyala/fasthttp"
 )
-
-func printChildren(n *node, prefix string) {
-	fmt.Printf(" %02d %s%s[%d] %v %t %d \r\n", n.priority, prefix, n.path, len(n.children), n.handle, n.wildChild, n.nType)
-	for l := len(n.path); l > 0; l-- {
-		prefix += " "
-	}
-	for _, child := range n.children {
-		printChildren(child, prefix)
-	}
-}
 
 // Used as a workaround since we can't compare functions or their addresses
 var fakeHandlerValue string
@@ -36,7 +22,7 @@ type testRequests []struct {
 	path       string
 	nilHandler bool
 	route      string
-	ps         map[string]string
+	ps         map[string]interface{}
 }
 
 func acquireRequestCtx(path string) *fasthttp.RequestCtx {
@@ -47,10 +33,10 @@ func acquireRequestCtx(path string) *fasthttp.RequestCtx {
 	return &requestCtx
 }
 
-func checkRequests(t *testing.T, tree *node, requests testRequests) {
+func checkRequests(t *testing.T, tree *Tree, requests testRequests) {
 	for _, request := range requests {
 		ctx := acquireRequestCtx(request.path)
-		handler, _ := tree.getValue(request.path, ctx)
+		handler, _ := tree.Get(request.path, ctx)
 
 		if handler == nil {
 			if !request.nilHandler {
@@ -59,51 +45,29 @@ func checkRequests(t *testing.T, tree *node, requests testRequests) {
 		} else if request.nilHandler {
 			t.Errorf("handle mismatch for route '%s': Expected nil handle", request.path)
 		} else {
-			handler(nil)
+			handler(ctx)
 			if fakeHandlerValue != request.route {
 				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandlerValue, request.route)
 			}
 		}
 
-		for expectedKey, expectedVal := range request.ps {
-			if ctx.UserValue(expectedKey) != expectedVal {
-				t.Errorf(" mismatch for route '%s'", request.path)
-			}
+		params := make(map[string]interface{})
+		if request.ps == nil {
+			request.ps = make(map[string]interface{})
+		}
+
+		ctx.VisitUserValues(func(key []byte, value interface{}) {
+			params[string(key)] = value
+		})
+
+		if !reflect.DeepEqual(params, request.ps) {
+			t.Errorf("Route %s - User values == %v, want %v", request.path, params, request.ps)
 		}
 	}
 }
 
-func checkPriorities(t *testing.T, n *node) uint32 {
-	var prio uint32
-	for i := range n.children {
-		prio += checkPriorities(t, n.children[i])
-	}
-
-	if n.handle != nil {
-		prio++
-	}
-
-	if n.priority != prio {
-		t.Errorf(
-			"priority mismatch for node '%s': is %d, should be %d",
-			n.path, n.priority, prio,
-		)
-	}
-
-	return prio
-}
-
-func TestCountParams(t *testing.T) {
-	if countParams("/path/:param1/static/*catch-all") != 2 {
-		t.Fail()
-	}
-	if countParams(strings.Repeat("/:param", 256)) != 256 {
-		t.Fail()
-	}
-}
-
 func TestTreeAddAndGet(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	routes := [...]string{
 		"/hi",
@@ -119,7 +83,7 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/β",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.Add(route, fakeHandler(route))
 	}
 
 	//printChildren(tree, "")
@@ -137,12 +101,10 @@ func TestTreeAddAndGet(t *testing.T) {
 		{"/α", false, "/α", nil},
 		{"/β", false, "/β", nil},
 	})
-
-	checkPriorities(t, tree)
 }
 
 func TestTreeWildcard(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	routes := [...]string{
 		"/",
@@ -161,29 +123,27 @@ func TestTreeWildcard(t *testing.T) {
 		"/info/:user/project/:project",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.Add(route, fakeHandler(route))
 	}
 
 	//printChildren(tree, "")
 
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
-		{"/cmd/test/", false, "/cmd/:tool/", map[string]string{"tool": "test"}},
-		{"/cmd/test", true, "", map[string]string{"tool": "test"}},
-		{"/cmd/test/3", false, "/cmd/:tool/:sub", map[string]string{"tool": "test", "sub": "3"}},
-		{"/src/", false, "/src/*filepath", map[string]string{"filepath": "/"}},
-		{"/src/some/file.png", false, "/src/*filepath", map[string]string{"filepath": "/some/file.png"}},
+		{"/cmd/test/", false, "/cmd/:tool/", map[string]interface{}{"tool": "test"}},
+		{"/cmd/test", true, "", map[string]interface{}{"tool": "test"}},
+		{"/cmd/test/3", false, "/cmd/:tool/:sub", map[string]interface{}{"tool": "test", "sub": "3"}},
+		{"/src/", false, "/src/*filepath", map[string]interface{}{"filepath": "/"}},
+		{"/src/some/file.png", false, "/src/*filepath", map[string]interface{}{"filepath": "some/file.png"}},
 		{"/search/", false, "/search/", nil},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]string{"query": "someth!ng+in+ünìcodé"}},
-		{"/search/someth!ng+in+ünìcodé/", true, "", map[string]string{"query": "someth!ng+in+ünìcodé"}},
-		{"/user_gopher", false, "/user_:name", map[string]string{"name": "gopher"}},
-		{"/user_gopher/about", false, "/user_:name/about", map[string]string{"name": "gopher"}},
-		{"/files/js/inc/framework.js", false, "/files/:dir/*filepath", map[string]string{"dir": "js", "filepath": "/inc/framework.js"}},
-		{"/info/gordon/public", false, "/info/:user/public", map[string]string{"user": "gordon"}},
-		{"/info/gordon/project/go", false, "/info/:user/project/:project", map[string]string{"user": "gordon", "project": "go"}},
+		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{"/search/someth!ng+in+ünìcodé/", true, "", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{"/user_gopher", false, "/user_:name", map[string]interface{}{"name": "gopher"}},
+		{"/user_gopher/about", false, "/user_:name/about", map[string]interface{}{"name": "gopher"}},
+		{"/files/js/inc/framework.js", false, "/files/:dir/*filepath", map[string]interface{}{"dir": "js", "filepath": "inc/framework.js"}},
+		{"/info/gordon/public", false, "/info/:user/public", map[string]interface{}{"user": "gordon"}},
+		{"/info/gordon/project/go", false, "/info/:user/project/:project", map[string]interface{}{"user": "gordon", "project": "go"}},
 	})
-
-	checkPriorities(t, tree)
 }
 
 func catchPanic(testFunc func()) (recv interface{}) {
@@ -201,11 +161,11 @@ type testRoute struct {
 }
 
 func testRoutes(t *testing.T, routes []testRoute) {
-	tree := &node{}
+	tree := New()
 
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.addRoute(route.path, nil)
+			tree.Add(route.path, nil)
 		})
 
 		if route.conflict {
@@ -223,20 +183,20 @@ func testRoutes(t *testing.T, routes []testRoute) {
 func TestTreeWildcardConflict(t *testing.T) {
 	routes := []testRoute{
 		{"/cmd/:tool/:sub", false},
-		{"/cmd/vet", true},
+		{"/cmd/vet", false},
 		{"/src/*filepath", false},
 		{"/src/*filepathx", true},
-		{"/src/", true},
+		{"/src/", false},
 		{"/src1/", false},
-		{"/src1/*filepath", true},
+		{"/src1/*filepath", false},
 		{"/src2*filepath", true},
 		{"/search/:query", false},
-		{"/search/invalid", true},
+		{"/search/invalid", false},
 		{"/user_:name", false},
-		{"/user_x", true},
-		{"/user_:name", false},
+		{"/user_x", false},
+		{"/user_:name", true},
 		{"/id:id", false},
-		{"/id/:id", true},
+		{"/id/:id", false},
 	}
 	testRoutes(t, routes)
 }
@@ -244,21 +204,23 @@ func TestTreeWildcardConflict(t *testing.T) {
 func TestTreeChildConflict(t *testing.T) {
 	routes := []testRoute{
 		{"/cmd/vet", false},
-		{"/cmd/:tool/:sub", true},
+		{"/cmd/:tool/:sub", false},
 		{"/src/AUTHORS", false},
-		{"/src/*filepath", true},
+		{"/src/*filepath", false},
 		{"/user_x", false},
-		{"/user_:name", true},
+		{"/user_:name", false},
 		{"/id/:id", false},
-		{"/id:id", true},
-		{"/:id", true},
-		{"/*filepath", true},
+		{"/id:id", false},
+		{"/:users", false},
+		{"/:id/", true},
+		{"/*filepath", false},
+		{"/asd*filepath", true},
 	}
 	testRoutes(t, routes)
 }
 
-func TestTreeDupliatePath(t *testing.T) {
-	tree := &node{}
+func TestTreeDuplicatePath(t *testing.T) {
+	tree := New()
 
 	routes := [...]string{
 		"/",
@@ -269,7 +231,7 @@ func TestTreeDupliatePath(t *testing.T) {
 	}
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.Add(route, fakeHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -277,7 +239,7 @@ func TestTreeDupliatePath(t *testing.T) {
 
 		// Add again
 		recv = catchPanic(func() {
-			tree.addRoute(route, nil)
+			tree.Add(route, nil)
 		})
 		if recv == nil {
 			t.Fatalf("no panic while inserting duplicate route '%s", route)
@@ -289,14 +251,14 @@ func TestTreeDupliatePath(t *testing.T) {
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
 		{"/doc/", false, "/doc/", nil},
-		{"/src/some/file.png", false, "/src/*filepath", map[string]string{"filepath": "/some/file.png"}},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]string{"query": "someth!ng+in+ünìcodé"}},
-		{"/user_gopher", false, "/user_:name", map[string]string{"name": "gopher"}},
+		{"/src/some/file.png", false, "/src/*filepath", map[string]interface{}{"filepath": "some/file.png"}},
+		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{"/user_gopher", false, "/user_:name", map[string]interface{}{"name": "gopher"}},
 	})
 }
 
 func TestEmptyWildcardName(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	routes := [...]string{
 		"/user:",
@@ -306,10 +268,10 @@ func TestEmptyWildcardName(t *testing.T) {
 	}
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.addRoute(route, nil)
+			tree.Add(route, nil)
 		})
 		if recv == nil {
-			t.Fatalf("no panic while inserting route with empty wildcard name '%s", route)
+			t.Errorf("no panic while inserting route with empty wildcard name '%s", route)
 		}
 	}
 }
@@ -328,15 +290,15 @@ func TestTreeCatchAllConflict(t *testing.T) {
 func TestTreeCatchAllConflictRoot(t *testing.T) {
 	routes := []testRoute{
 		{"/", false},
-		{"/*filepath", true},
+		{"/*filepath", false},
 	}
 	testRoutes(t, routes)
 }
 
 func TestTreeCatchMaxParams(t *testing.T) {
-	tree := &node{}
+	tree := New()
 	var route = "/cmd/*filepath"
-	tree.addRoute(route, fakeHandler(route))
+	tree.Add(route, fakeHandler(route))
 }
 
 func TestTreeDoubleWildcard(t *testing.T) {
@@ -349,9 +311,9 @@ func TestTreeDoubleWildcard(t *testing.T) {
 	}
 
 	for _, route := range routes {
-		tree := &node{}
+		tree := New()
 		recv := catchPanic(func() {
-			tree.addRoute(route, nil)
+			tree.Add(route, nil)
 		})
 
 		if rs, ok := recv.(string); !ok || !strings.HasPrefix(rs, panicMsg) {
@@ -372,7 +334,7 @@ func TestTreeDoubleWildcard(t *testing.T) {
 }*/
 
 func TestTreeTrailingSlashRedirect(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	routes := [...]string{
 		"/hi",
@@ -402,7 +364,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 	}
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.Add(route, fakeHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -428,7 +390,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/doc/",
 	}
 	for _, route := range tsrRoutes {
-		handler, tsr := tree.getValue(route, nil)
+		handler, tsr := tree.Get(route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for TSR route '%s", route)
 		} else if !tsr {
@@ -445,7 +407,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/api/world/abc",
 	}
 	for _, route := range noTsrRoutes {
-		handler, tsr := tree.getValue(route, nil)
+		handler, tsr := tree.Get(route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for No-TSR route '%s", route)
 		} else if tsr {
@@ -455,16 +417,16 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 }
 
 func TestTreeRootTrailingSlashRedirect(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	recv := catchPanic(func() {
-		tree.addRoute("/:test", fakeHandler("/:test"))
+		tree.Add("/:test", fakeHandler("/:test"))
 	})
 	if recv != nil {
 		t.Fatalf("panic inserting test route: %v", recv)
 	}
 
-	handler, tsr := tree.getValue("/", nil)
+	handler, tsr := tree.Get("/", nil)
 	if handler != nil {
 		t.Fatalf("non-nil handler")
 	} else if tsr {
@@ -473,7 +435,7 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 }
 
 func TestTreeFindCaseInsensitivePath(t *testing.T) {
-	tree := &node{}
+	tree := New()
 
 	longPath := "/l" + strings.Repeat("o", 128) + "ng"
 	lOngPath := "/l" + strings.Repeat("O", 128) + "ng/"
@@ -504,6 +466,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		"/Π",
 		"/u/apfêl/",
 		"/u/äpfêl/",
+		"/u/äpkul/",
 		"/u/öpfêl",
 		"/v/Äpfêl/",
 		"/v/Öpfêl",
@@ -516,7 +479,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.Add(route, fakeHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -526,7 +489,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	// Check out == in for all registered routes
 	// With fixTrailingSlash = true
 	for _, route := range routes {
-		out, found := tree.findCaseInsensitivePath(route, true)
+		out, found := tree.FindCaseInsensitivePath(route, true)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if string(out) != route {
@@ -535,7 +498,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = false
 	for _, route := range routes {
-		out, found := tree.findCaseInsensitivePath(route, false)
+		out, found := tree.FindCaseInsensitivePath(route, false)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if string(out) != route {
@@ -593,6 +556,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		{"/π", "/Π", true, false},
 		{"/π/", "/Π", true, true},
 		{"/u/ÄPFÊL/", "/u/äpfêl/", true, false},
+		{"/U/ÄPKUL/", "/u/äpkul/", true, false},
 		{"/u/ÄPFÊL", "/u/äpfêl/", true, true},
 		{"/u/ÖPFÊL/", "/u/öpfêl", true, true},
 		{"/u/ÖPFÊL", "/u/öpfêl", true, false},
@@ -608,16 +572,15 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = true
 	for _, test := range tests {
-		out, found := tree.findCaseInsensitivePath(test.in, true)
+		out, found := tree.FindCaseInsensitivePath(test.in, true)
 		if found != test.found || (found && (string(out) != test.out)) {
 			t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
 				test.in, string(out), found, test.out, test.found)
-			return
 		}
 	}
 	// With fixTrailingSlash = false
 	for _, test := range tests {
-		out, found := tree.findCaseInsensitivePath(test.in, false)
+		out, found := tree.FindCaseInsensitivePath(test.in, false)
 		if test.slash {
 			if found { // test needs a trailingSlash fix. It must not be found!
 				t.Errorf("Found without fixTrailingSlash: %s; got %s", test.in, string(out))
@@ -626,7 +589,6 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 			if found != test.found || (found && (string(out) != test.out)) {
 				t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
 					test.in, string(out), found, test.out, test.found)
-				return
 			}
 		}
 	}
@@ -635,16 +597,16 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 func TestTreeInvalidNodeType(t *testing.T) {
 	const panicMsg = "invalid node type"
 
-	tree := &node{}
-	tree.addRoute("/", fakeHandler("/"))
-	tree.addRoute("/:page", fakeHandler("/:page"))
+	tree := New()
+	tree.Add("/", fakeHandler("/"))
+	tree.Add("/:page", fakeHandler("/:page"))
 
 	// set invalid node type
-	tree.children[0].nType = 42
+	tree.root.children[0].nType = 42
 
 	// normal lookup
 	recv := catchPanic(func() {
-		tree.getValue("/test", nil)
+		tree.Get("/test", nil)
 	})
 	if rs, ok := recv.(string); !ok || rs != panicMsg {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
@@ -652,7 +614,7 @@ func TestTreeInvalidNodeType(t *testing.T) {
 
 	// case-insensitive lookup
 	recv = catchPanic(func() {
-		tree.findCaseInsensitivePath("/test", true)
+		tree.FindCaseInsensitivePath("/test", true)
 	})
 	if rs, ok := recv.(string); !ok || rs != panicMsg {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
@@ -660,40 +622,87 @@ func TestTreeInvalidNodeType(t *testing.T) {
 }
 
 func TestTreeWildcardConflictEx(t *testing.T) {
-	conflicts := [...]struct {
-		route        string
-		segPath      string
-		existPath    string
-		existSegPath string
+	conflicts := []struct {
+		route string
+
+		wantErr     bool
+		wantErrText string
 	}{
-		{"/who/are/foo", "/foo", `/who/are/\*you`, `/\*you`},
-		{"/who/are/foo/", "/foo/", `/who/are/\*you`, `/\*you`},
-		{"/who/are/foo/bar", "/foo/bar", `/who/are/\*you`, `/\*you`},
-		{"/conxxx", "xxx", `/con:tact`, `:tact`},
-		{"/conooo/xxx", "ooo", `/con:tact`, `:tact`},
+		{route: "/who/are/foo", wantErr: false},
+		{route: "/who/are/foo/", wantErr: false},
+		{route: "/who/are/foo/bar", wantErr: false},
+		{route: "/conxxx", wantErr: false},
+		{route: "/conooo/xxx", wantErr: false},
+		{
+			route:       "invalid/data",
+			wantErr:     true,
+			wantErrText: "path must begin with '/' in path 'invalid/data'",
+		},
+		{
+			route:       "/con:tact",
+			wantErr:     true,
+			wantErrText: "':tact' in new path '/con:tact' conflicts with existing wildcard ':tact' in existing prefix '/con:tact'",
+		},
+		{
+			route:       "/who/are/*me",
+			wantErr:     true,
+			wantErrText: "'*me' in new path '/who/are/*me' conflicts with existing wildcard '*you' in existing prefix '/who/are/*you'",
+		},
+		{
+			route:       "/who/foo/hello",
+			wantErr:     true,
+			wantErrText: "a handle is already registered for path '/who/foo/hello'",
+		},
+		{
+			route:       "/*static",
+			wantErr:     true,
+			wantErrText: "'*static' in new path '/*static' conflicts with existing wildcard '*filepath' in existing prefix '/*filepath'",
+		},
+		{
+			route:       "/static/*filepath/other",
+			wantErr:     true,
+			wantErrText: "wildcard routes are only allowed at the end of the path in path '/static/*filepath/other'",
+		},
+		{
+			route:       "/:user/",
+			wantErr:     true,
+			wantErrText: "':user' in new path '/:user/' conflicts with existing wildcard ':id' in existing prefix '/:id'",
+		},
+		{
+			route:       "/prefix*filepath",
+			wantErr:     true,
+			wantErrText: "no / before wildcard in path '/prefix*filepath'",
+		},
 	}
 
 	for _, conflict := range conflicts {
 		// I have to re-create a 'tree', because the 'tree' will be
 		// in an inconsistent state when the loop recovers from the
 		// panic which threw by 'addRoute' function.
-		tree := &node{}
+		tree := New()
 		routes := [...]string{
 			"/con:tact",
 			"/who/are/*you",
 			"/who/foo/hello",
+			"/*filepath",
+			"/:id",
 		}
 
 		for _, route := range routes {
-			tree.addRoute(route, fakeHandler(route))
+			tree.Add(route, fakeHandler(route))
 		}
 
-		recv := catchPanic(func() {
-			tree.addRoute(conflict.route, fakeHandler(conflict.route))
+		err := catchPanic(func() {
+			tree.Add(conflict.route, fakeHandler(conflict.route))
 		})
 
-		if !regexp.MustCompile(fmt.Sprintf("'%s' in new path .* conflicts with existing wildcard '%s' in existing prefix '%s'", conflict.segPath, conflict.existSegPath, conflict.existPath)).MatchString(fmt.Sprint(recv)) {
-			t.Fatalf("invalid wildcard conflict error (%v)", recv)
+		if conflict.wantErr == (err == nil) {
+			t.Errorf("Unexpected error: %v", err)
 		}
+
+		if err != nil && conflict.wantErrText != fmt.Sprint(err) {
+			t.Errorf("Invalid conflict error text (%v)", err)
+		}
+
 	}
 }

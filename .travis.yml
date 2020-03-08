@@ -1,11 +1,13 @@
 language: go
 
+sudo: false
 go:
   - 1.9.x
   - 1.10.x
   - 1.11.x
   - 1.12.x
   - 1.13.x
+  - 1.14.x
   - tip
 
 os:
@@ -18,7 +20,10 @@ matrix:
   fast_finish: true
 
 before_install:
+  - go get -u -v golang.org/x/tools/cmd/cover
+  - go get -u -v github.com/modocache/gover
   - go get -u -v github.com/mattn/goveralls
+  - go get -v ./...
 
 script:
   # build test for supported platforms
@@ -28,7 +33,13 @@ script:
   - GOOS=windows go build
   - GOARCH=386 go build
 
-    # run tests with the race detector
-  - go test -v -race
+  # run tests
+  - |
+    pkgs=($(go list ./... | grep -v examples | tr '\n' ' '))
+    for i in "${!pkgs[@]}"; do
+      go test -v -cover -race -coverprofile=$i.coverprofile ${pkgs[i]}
+    done
 
-  - $GOPATH/bin/goveralls -v -service=travis-ci -package github.com/fasthttp/router
+  # send coverage
+  - $HOME/gopath/bin/gover
+  - $HOME/gopath/bin/goveralls -coverprofile=gover.coverprofile -service=travis-ci

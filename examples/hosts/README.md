@@ -1,4 +1,4 @@
-# Example of FastHttpRouter
+# Example of Router
 
 These examples show you the usage of `router`. You can easily build a web application with it. Or you can make your own midwares such as custom logger, metrics, or any one you want.
 
