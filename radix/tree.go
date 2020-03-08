@@ -213,7 +213,7 @@ func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool) ([]by
 			// Search is finished but the requested path has a trainling slash
 
 			if n.tsr {
-				// Adds the traling slash because the route is registed with a trailing slash
+				// Adds the traling slash because the route is registered with a trailing slash
 				buf = append(buf, '/')
 
 			} else if !fixTrailingSlash {

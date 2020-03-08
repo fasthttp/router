@@ -1,7 +1,7 @@
 // Copyright 2013 Julien Schmidt. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
-
+//
 // Package router is a trie based high performance HTTP request router.
 //
 // A trivial example is:
@@ -11,7 +11,7 @@
 //  import (
 //      "fmt"
 //      "log"
-
+//
 //      "github.com/fasthttp/router"
 //  )
 //

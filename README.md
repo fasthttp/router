@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/fasthttp/router.svg?branch=master)](https://travis-ci.org/fasthttp/router)
 [![Coverage Status](https://coveralls.io/repos/fasthttp/router/badge.svg?branch=master&service=github)](https://coveralls.io/github/fasthttp/router?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/fasthttp/router)](https://goreportcard.com/report/github.com/fasthttp/router)
-[![GoDoc](http://godoc.org/github.com/fasthttp/router?status.svg)](http://godoc.org/github.com/fasthttp/router)
+[![GoDoc](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white)](https://pkg.go.dev/github.com/fasthttp/router?tab=doc)
 [![GitHub release](https://img.shields.io/github/release/fasthttp/router.svg)](https://github.com/fasthttp/router/releases)
 
 Router is a lightweight high performance HTTP request router (also called _multiplexer_ or just _mux_ for short) for [fasthttp](https://github.com/valyala/fasthttp).

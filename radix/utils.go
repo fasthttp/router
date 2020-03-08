@@ -64,7 +64,7 @@ func pathNodeType(path string) nodeType {
 	return static
 }
 
-// findWildPath searchs for a wild path segment and check the name for invalid characters.
+// findWildPath search for a wild path segment and check the name for invalid characters.
 // Returns -1 as index, if no param/wildcard was found.
 func findWildPath(path string) (wilcard string, i int, valid bool) {
 	// Find start
