@@ -93,7 +93,7 @@ func catchPanic(testFunc func()) (recv interface{}) {
 }
 
 func TestRouter(t *testing.T) {
-	router := New()
+	router := new_base_router()
 
 	routed := false
 	router.Handle(fasthttp.MethodGet, "/user/:name", func(ctx *fasthttp.RequestCtx) {
@@ -128,7 +128,7 @@ func TestRouterAPI(t *testing.T) {
 		handled = true
 	}
 
-	router := New()
+	router := new_base_router()
 	router.GET("/GET", func(ctx *fasthttp.RequestCtx) {
 		get = true
 	})
@@ -202,7 +202,7 @@ func TestRouterAPI(t *testing.T) {
 }
 
 func TestRouterInvalidInput(t *testing.T) {
-	router := New()
+	router := new_base_router()
 
 	handle := func(_ *fasthttp.RequestCtx) {}
 
@@ -236,8 +236,8 @@ func TestRouterInvalidInput(t *testing.T) {
 }
 
 func TestRouterChaining(t *testing.T) {
-	router1 := New()
-	router2 := New()
+	router1 := new_base_router()
+	router2 := new_base_router()
 	router1.NotFound = router2.Handler
 
 	fooHit := false
@@ -283,7 +283,7 @@ func TestRouterChaining(t *testing.T) {
 }
 
 func TestRouterGroup(t *testing.T) {
-	r1 := New()
+	r1 := new_base_router()
 	r2 := r1.Group("/boo")
 	r3 := r1.Group("/goo")
 	r4 := r1.Group("/moo")
@@ -371,7 +371,7 @@ func TestRouterGroup(t *testing.T) {
 func TestRouterOPTIONS(t *testing.T) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 
-	router := New()
+	router := new_base_router()
 	router.POST("/path", handlerFunc)
 
 	ctx := new(fasthttp.RequestCtx)
@@ -446,7 +446,7 @@ func TestRouterOPTIONS(t *testing.T) {
 func TestRouterNotAllowed(t *testing.T) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 
-	router := New()
+	router := new_base_router()
 	router.POST("/path", handlerFunc)
 
 	ctx := new(fasthttp.RequestCtx)
@@ -502,7 +502,7 @@ func TestRouterNotFound(t *testing.T) {
 		return fmt.Sprintf("http://%s%s", host, path)
 	}
 
-	router := New()
+	router := new_base_router()
 	router.GET("/path", handlerFunc)
 	router.GET("/dir/", handlerFunc)
 	router.GET("/", handlerFunc)
@@ -576,7 +576,7 @@ func TestRouterNotFound(t *testing.T) {
 	ctx.Response.Reset()
 
 	// Test special case where no node for the prefix "/" exists
-	router = New()
+	router = new_base_router()
 	router.GET("/a", handlerFunc)
 
 	ctx.Request.Header.SetMethod(fasthttp.MethodPatch)
@@ -588,7 +588,7 @@ func TestRouterNotFound(t *testing.T) {
 }
 
 func TestRouterPanicHandler(t *testing.T) {
-	router := New()
+	router := new_base_router()
 	panicHandled := false
 
 	router.PanicHandler = func(ctx *fasthttp.RequestCtx, p interface{}) {
@@ -624,7 +624,7 @@ func TestRouterLookup(t *testing.T) {
 	wantParams := map[string]string{"name": "gopher"}
 
 	ctx := new(fasthttp.RequestCtx)
-	router := New()
+	router := new_base_router()
 
 	// try empty router first
 	handle, tsr := router.Lookup(fasthttp.MethodGet, "/nope", ctx)
@@ -721,7 +721,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 		routed3 = true
 	}
 
-	router := New()
+	router := new_base_router()
 	router.SaveMatchedRoutePath = true
 	router.Handle(fasthttp.MethodGet, route1, handle1)
 	router.Handle(fasthttp.MethodGet, route2, handle2)
@@ -752,7 +752,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 }
 
 func TestRouterServeFiles(t *testing.T) {
-	r := New()
+	r := new_base_router()
 
 	recv := catchPanic(func() {
 		r.ServeFiles("/noFilepath", os.TempDir())
@@ -781,7 +781,7 @@ func TestRouterServeFiles(t *testing.T) {
 }
 
 func TestRouterServeFilesCustom(t *testing.T) {
-	r := New()
+	r := new_base_router()
 
 	root := os.TempDir()
 
@@ -823,7 +823,7 @@ func TestRouterList(t *testing.T) {
 		"DELETE": []string{"/v1/users/:id?"},
 	}
 
-	r := New()
+	r := new_base_router()
 	r.GET("/bar", func(ctx *fasthttp.RequestCtx) {})
 	r.PATCH("/foo", func(ctx *fasthttp.RequestCtx) {})
 
@@ -842,7 +842,7 @@ func TestRouterList(t *testing.T) {
 func BenchmarkAllowed(b *testing.B) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 
-	router := New()
+	router := new_base_router()
 	router.POST("/path", handlerFunc)
 	router.GET("/path", handlerFunc)
 
@@ -863,7 +863,7 @@ func BenchmarkAllowed(b *testing.B) {
 func BenchmarkRouterGet(b *testing.B) {
 	resp := []byte("Bench GET")
 
-	r := New()
+	r := new_base_router()
 	r.GET("/", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})
@@ -880,7 +880,7 @@ func BenchmarkRouterGet(b *testing.B) {
 func BenchmarkRouterNotFound(b *testing.B) {
 	resp := []byte("Bench Not Found")
 
-	r := New()
+	r := new_base_router()
 	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})
@@ -897,7 +897,7 @@ func BenchmarkRouterNotFound(b *testing.B) {
 func BenchmarkRouterCleanPath(b *testing.B) {
 	resp := []byte("Bench GET")
 
-	r := New()
+	r := new_base_router()
 	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})
@@ -914,7 +914,7 @@ func BenchmarkRouterCleanPath(b *testing.B) {
 func BenchmarkRouterRedirectTrailingSlash(b *testing.B) {
 	resp := []byte("Bench GET")
 
-	r := New()
+	r := new_base_router()
 	r.GET("/bench/", func(ctx *fasthttp.RequestCtx) {
 		ctx.Success("text/plain", resp)
 	})

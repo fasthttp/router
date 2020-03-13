@@ -150,7 +150,7 @@ func TestGetOptionalPath(t *testing.T) {
 		"/show/:name/:surname/at/:address/:id",
 		"/show/:name/:surname/at/:address/:id/:phone",
 	}
-	r := New()
+	r := new_base_router()
 	r.GET("/show/:name/:surname?/at/:address?/:id/:phone?", handler)
 
 	for _, path := range expectedPaths {
