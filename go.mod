@@ -1,4 +1,4 @@
-module github.com/fasthttp/router
+module github.com/zzztttkkk/router
 
 go 1.13
 
