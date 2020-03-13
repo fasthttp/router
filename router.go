@@ -1,61 +1,39 @@
 package router
 
 import (
-	"sync"
-
 	"github.com/valyala/fasthttp"
 )
 
 type Router struct {
 	*BaseRouter
 
-	lock    *sync.Mutex
 	befores []Middleware
 	afters  []Middleware
-
-	children []*Router
 }
 
 func New() *Router {
 	return &Router{
 		BaseRouter: new_base_router(),
-		lock:       &sync.Mutex{},
 		befores:    make([]Middleware, 0),
 		afters:     make([]Middleware, 0),
-		children:   make([]*Router, 0),
 	}
 }
 
 func (mr *Router) Group(path string) *Router {
 	child := &Router{
 		BaseRouter: mr.BaseRouter.Group(path),
-		lock:       &sync.Mutex{},
 		befores:    make([]Middleware, 0),
 		afters:     make([]Middleware, 0),
-		children:   make([]*Router, 0),
 	}
 
-	mr.children = append(mr.children, child)
 	return child
 }
 
-// Lock protect middleware slices.
-func (mr *Router) Lock() {
-	mr.lock.Lock()
-	for _, child := range mr.children {
-		child.Lock()
-	}
-}
-
 func (mr *Router) Before(mw Middleware) {
-	mr.lock.Lock()
-	defer mr.lock.Unlock()
 	mr.befores = append(mr.befores, mw)
 }
 
 func (mr *Router) After(mw Middleware) {
-	mr.lock.Lock()
-	defer mr.lock.Unlock()
 	mr.afters = append(mr.afters, mw)
 }
 

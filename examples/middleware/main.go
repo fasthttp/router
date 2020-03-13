@@ -35,7 +35,5 @@ func main() {
 		},
 	)
 
-	root.Lock()
-
 	log.Fatal(fasthttp.ListenAndServe(":8080", root.Handler))
 }
