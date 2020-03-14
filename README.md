@@ -24,7 +24,7 @@ This router is optimized for high performance and a small memory footprint. It s
 
 ![](https://raw.githubusercontent.com/smallnest/go-web-framework-benchmark/master/benchmark.png)
 
-- Concurrency Test (allocations): In 30 ms processing time, the tets result for 100, 1000, 5000 clients is:
+- Concurrency Test (allocations): In 30 ms processing time, the test result for 100, 1000, 5000 clients is:
 
 \* _Smaller is better_
 
