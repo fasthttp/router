@@ -264,15 +264,15 @@ walk:
 					return nil, false
 				}
 
-				n2, tsr := child.getFromChild(path[end:], ctx)
+				h, tsr := child.getFromChild(path[end:], ctx)
 				if tsr {
 					return nil, tsr
-				} else if n2 != nil {
+				} else if h != nil {
 					if ctx != nil {
 						ctx.SetUserValue(child.path[1:], path[:end])
 					}
 
-					return n2, false
+					return h, false
 				}
 
 			default:
