@@ -40,87 +40,30 @@ func (n *node) wildPathConflict(path, fullPath string) {
 		"'")
 }
 
-// add adds the handler to node for the given path
-func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*node, string) {
-	end := segmentEndIndex(path)
+func (n *node) split(i int) {
+	cloneChild := n.clone()
+	cloneChild.path = cloneChild.path[i:]
+	cloneChild.nType = pathNodeType(cloneChild.path)
 
-	for _, child := range n.children {
-		switch child.nType {
-		case static:
+	n.path = n.path[:i]
+	n.handler = nil
+	n.wildcard = nil
+	n.children = append(n.children[:0], cloneChild)
+}
 
-			// Find the longest common prefix.
-			// This also implies that the common prefix contains no ':' or '*'
-			// since the existing key can't contain those chars.
-			i := longestCommonPrefix(path, child.path)
-
-			if i > 0 && len(child.path) > i {
-				// Splits edge because has the same prefix
-
-				cloneChild := child.clone()
-				cloneChild.path = cloneChild.path[i:]
-
-				child.path = child.path[:i]
-				child.handler = nil
-				child.wildcard = nil
-				child.children = append(child.children[:0], cloneChild)
-
-				if len(path[i:]) == 0 {
-					//It's the last segment
-
-					child.handler = handler
-
-					return child, ""
-				}
-
-				// Adds the next segment to the child
-				return child.add(path[i:], fullPath, handler)
-			}
-
-			if len(path) > len(child.path) {
-				// Checks if the path prefix is equal than the child path
-
-				if path[:len(child.path)] == child.path {
-					// Adds the next segment to the child
-
-					return child.add(path[len(child.path):], fullPath, handler)
-				}
-			} else if path == child.path {
-				// Last segment, so adds the handler to the node
-
-				if child.handler != nil {
-					panic("a handle is already registered for path '" + fullPath + "'")
-				}
-
-				child.handler = handler
-
-				return child, ""
-			}
-		case param:
-
-			if path[0] == ':' && len(path) == end && (child.handler != nil || handler == nil) {
-				// The current segment is a param and it's duplicated
-
-				child.wildPathConflict(path, fullPath)
-			}
-
-			if path == child.path {
-				// Last segment, so adds the handler to the pre-registered node without handler
-
-				child.handler = handler
-
-				return child, ""
-			} else if path[:end] == child.path {
-				// Checks if the path prefix is equal than the child path
-
-				return child.add(path[end:], fullPath, handler)
-			}
-		}
+func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
+	if n.handler != nil {
+		panic("a handle is already registered for path '" + fullPath + "'")
 	}
 
+	n.handler = handler
+}
+
+func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *node {
+	end := segmentEndIndex(path)
 	newNode := &node{path: path, nType: pathNodeType(path)}
 
 	wildPath, i, valid := findWildPath(path)
-
 	if valid && i >= 0 {
 		// Finds a valid wilcard/param
 
@@ -154,7 +97,7 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*nod
 			// Adds the next segment to the new node
 
 			n.children = append(n.children, newNode)
-			return newNode.add(path[j:], fullPath, handler)
+			return newNode.insert(path[j:], fullPath, handler)
 		}
 	}
 
@@ -167,155 +110,279 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*nod
 			n.wildcard.wildPathConflict(path, fullPath)
 		}
 
-		n.wildcard = newNode
-
 		if len(n.path) > 2 && n.path[len(n.path)-1] == '/' {
 			// Splits edge if the path of the current node finish with a slash
 
 			i := len(n.path) - 1
-			cloneChild := n.clone()
-			cloneChild.path = n.path[i:]
+			n.split(i)
 
-			n.path = n.path[:i]
-			n.handler = nil
-			n.wildcard = nil
 			n.tsr = true
-			n.children = append(n.children[:0], cloneChild)
+			n = n.children[0]
 		}
+
+		n.wildcard = newNode
+
 	} else {
 		// Adds the new node as a child
 
 		n.children = append(n.children, newNode)
 	}
 
-	return newNode, ""
+	return newNode
 }
 
-// get gets the child node for the given path
-func (n *node) get(path string, ctx *fasthttp.RequestCtx) (*node, string) {
+// add adds the handler to node for the given path
+func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node {
+	if n.path == path {
+		n.setHandler(handler, fullPath)
+
+		return n
+	}
+
 	for _, child := range n.children {
+		i := longestCommonPrefix(path, child.path)
+		if i == 0 {
+			continue
+		}
+
 		switch child.nType {
 		case static:
-
-			// Checks if the first node of the path and child path is equal
-			// It's faster than compare strings
-			if path[0] != child.path[0] {
-				continue
+			if len(child.path) > i {
+				child.split(i)
 			}
 
-			if len(path) > len(child.path) {
-				// Checks if the path prefix is equal than the child path
-
-				if path[:len(child.path)] == child.path {
-					// Same prefix, so returns the child node
-
-					return child, path[len(child.path):]
-				}
-			} else if path == child.path {
-				// Same path, so returns the child node
-
-				return child, path[len(child.path):]
+			if len(path) > i {
+				return child.add(path[i:], fullPath, handler)
 			}
 		case param:
 			end := segmentEndIndex(path)
 
-			if end == len(path) {
-				// Last segment, so sets the value and finish
+			if path[0] == ':' && len(path) == end && (child.handler != nil || handler == nil) {
+				// The current segment is a param and it's duplicated
 
-				if ctx != nil {
-					ctx.SetUserValue(child.path[1:], path)
-				}
-
-				return child, ""
-			} else if path[end:] == "/" {
-				// Last segment, so sets the value and finishes it returning the remaining slash
-
-				if ctx != nil {
-					ctx.SetUserValue(child.path[1:], path[:end])
-				}
-
-				return child, "/"
+				child.wildPathConflict(path, fullPath)
 			}
 
-			// Recursive search to know if the current branch it's correct
-			n2, path2 := child.get(path[end:], ctx)
-			if n2 != nil {
-				// It's the correct branch so sets the value and continues
-				if ctx != nil {
-					ctx.SetUserValue(child.path[1:], path[:end])
-				}
+			if len(path) > end && path[:end] == child.path {
+				return child.add(path[end:], fullPath, handler)
 
-				return n2, path2
+			} else if i < 2 {
+				// New param, the common string is ':'
+				return n.insert(path, fullPath, handler)
 			}
-		default:
-			panic("invalid node type")
 		}
+
+		child.setHandler(handler, fullPath)
+
+		return child
 	}
 
-	return n.wildcard, path
+	return n.insert(path, fullPath, handler)
 }
 
-// getInsensitive gets the child node for the given case insensitive path
-func (n *node) getInsensitive(path string, buf []byte) (*node, string, []byte) {
-	for _, child := range n.children {
-		switch child.nType {
-		case static:
-			// if !isIndexEqual(path, child.path) {
-			// 	continue
-			// }
+func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+walk:
+	for {
+		for _, child := range n.children {
+			switch child.nType {
+			case static:
 
-			if len(path) > len(child.path) {
-				if !strings.EqualFold(path[:len(child.path)], child.path) {
-					// Checks if the path prefix is equal than the child path
+				// Checks if the first byte is equal
+				// It's faster than compare strings
+				if path[0] != child.path[0] {
 					continue
 				}
 
-				if path[len(child.path):] == "/" {
-					// Found it, because it's the last segment with a trailing slash
+				if len(path) > len(child.path) {
+					if path[:len(child.path)] != child.path {
+						continue
+					}
 
-					return child, "/", append(buf, child.path...)
+					path = path[len(child.path):]
+
+					if len(path) == 1 {
+						if path == "/" && child.handler != nil {
+							if child.tsr {
+								return child.handler, false
+							}
+
+							return nil, true
+						}
+					}
+
+					n = child
+					continue walk
+
+				} else if path == child.path {
+
+					switch {
+					case child.tsr:
+						return nil, true
+					case child.handler != nil:
+						return child.handler, false
+					case child.wildcard != nil:
+						if ctx != nil {
+							ctx.SetUserValue(child.wildcard.path[1:], path)
+						}
+
+						return child.wildcard.handler, false
+					}
+
+					return nil, false
 				}
 
-				// Recursive search to know if the current branch it's correct
-				n2, path2, buf2 := child.getInsensitive(path[len(child.path):], append(buf, child.path...))
-				if n2 != nil {
-					// It's the correct branch so continues
+			case param:
+				end := segmentEndIndex(path)
 
-					return n2, path2, buf2
+				if child.handler != nil {
+					if end == len(path) {
+
+						if child.tsr {
+							return nil, true
+						}
+
+						if ctx != nil {
+							ctx.SetUserValue(child.path[1:], path[:end])
+						}
+
+						return child.handler, false
+
+					} else if path[end:] == "/" {
+
+						if !child.tsr {
+							return nil, true
+						}
+
+						if ctx != nil {
+							ctx.SetUserValue(child.path[1:], path[:end])
+						}
+
+						return child.handler, false
+
+					}
+				} else if len(path[end:]) == 0 {
+					return nil, false
 				}
 
-			} else if strings.EqualFold(path, child.path) {
-				// Found it
+				n2, tsr := child.getFromChild(path[end:], ctx)
+				if tsr {
+					return nil, tsr
+				} else if n2 != nil {
+					if ctx != nil {
+						ctx.SetUserValue(child.path[1:], path[:end])
+					}
 
-				return child, path[len(child.path):], append(buf, child.path...)
+					return n2, false
+				}
+
+			default:
+				panic("invalid node type")
 			}
+		}
+
+		if n.wildcard != nil {
+			if ctx != nil {
+				ctx.SetUserValue(n.wildcard.path[1:], path)
+			}
+
+			return n.wildcard.handler, false
+		}
+
+		return nil, false
+	}
+}
+
+func (n *node) find(path string, buf []byte) ([]byte, bool) {
+	if len(path) > len(n.path) {
+		if strings.EqualFold(path[:len(n.path)], n.path) {
+
+			path = path[len(n.path):]
+			buf = append(buf, n.path...)
+
+			if len(path) == 1 {
+				if path == "/" && n.handler != nil {
+					if n.tsr {
+						buf = append(buf, '/')
+
+						return buf, false
+					}
+
+					return buf, true
+				}
+			}
+
+			return n.findChild(path, buf)
+		}
+	} else if strings.EqualFold(path, n.path) && n.handler != nil {
+		buf = append(buf, n.path...)
+
+		if n.tsr {
+			buf = append(buf, '/')
+
+			return buf, true
+		}
+
+		return buf, false
+	}
+
+	return nil, false
+}
+
+func (n *node) findChild(path string, buf []byte) ([]byte, bool) {
+	for _, child := range n.children {
+		switch child.nType {
+		case static:
+			buf2, tsr := child.find(path, buf)
+			if buf2 != nil || tsr {
+				return buf2, tsr
+			}
+
 		case param:
 			end := segmentEndIndex(path)
 
-			if end == len(path) {
-				// Found it
+			if child.handler != nil {
+				if end == len(path) {
+					buf = append(buf, path...)
 
-				return child, "", append(buf, path...)
-			} else if path[end:] == "/" {
-				// Found it, because it's the last segment with a trailing slash
+					if child.tsr {
+						buf = append(buf, '/')
 
-				return child, "/", append(buf, path[:end]...)
+						return buf, true
+					}
+
+					return buf, false
+				} else if path[end:] == "/" {
+					buf = append(buf, path[:end]...)
+
+					if child.tsr {
+						buf = append(buf, '/')
+
+						return buf, false
+					}
+
+					return buf, true
+				}
+			} else if len(path[end:]) == 0 {
+				return nil, false
 			}
 
-			// Recursive search to know if the current branch it's correct
-			n2, path2, _ := child.getInsensitive(path[end:], buf)
-			if n2 != nil {
-				// It's the correct branch so sets the value and continues
-
-				buf = append(buf, path[:end]...)
-				return n2, path2, append(buf, n2.path...)
+			buf2, tsr := child.findChild(path[end:], append(buf, path[:end]...))
+			if buf2 != nil || tsr {
+				return buf2, tsr
 			}
+
 		default:
 			panic("invalid node type")
 		}
 	}
 
-	return n.wildcard, path, buf
+	if n.wildcard != nil {
+		buf = append(buf, path...)
+
+		return buf, false
+	}
+
+	return nil, false
 }
 
 // clone clones the current node in a new pointer

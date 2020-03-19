@@ -1,8 +1,6 @@
 package radix
 
-import (
-	"unicode/utf8"
-)
+import "unicode/utf8"
 
 func min(a, b int) int {
 	if a <= b {

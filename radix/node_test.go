@@ -111,6 +111,7 @@ func TestTreeWildcard(t *testing.T) {
 		"/cmd/:tool/:sub",
 		"/cmd/:tool/",
 		"/src/*filepath",
+		"/src/data",
 		"/search/",
 		"/search/:query",
 		"/user_:name",
@@ -131,18 +132,19 @@ func TestTreeWildcard(t *testing.T) {
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
 		{"/cmd/test/", false, "/cmd/:tool/", map[string]interface{}{"tool": "test"}},
-		{"/cmd/test", true, "", map[string]interface{}{"tool": "test"}},
+		{"/cmd/test", true, "", nil},
 		{"/cmd/test/3", false, "/cmd/:tool/:sub", map[string]interface{}{"tool": "test", "sub": "3"}},
 		{"/src/", false, "/src/*filepath", map[string]interface{}{"filepath": "/"}},
 		{"/src/some/file.png", false, "/src/*filepath", map[string]interface{}{"filepath": "some/file.png"}},
 		{"/search/", false, "/search/", nil},
 		{"/search/someth!ng+in+ünìcodé", false, "/search/:query", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
-		{"/search/someth!ng+in+ünìcodé/", true, "", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{"/search/someth!ng+in+ünìcodé/", true, "", nil},
 		{"/user_gopher", false, "/user_:name", map[string]interface{}{"name": "gopher"}},
 		{"/user_gopher/about", false, "/user_:name/about", map[string]interface{}{"name": "gopher"}},
 		{"/files/js/inc/framework.js", false, "/files/:dir/*filepath", map[string]interface{}{"dir": "js", "filepath": "inc/framework.js"}},
 		{"/info/gordon/public", false, "/info/:user/public", map[string]interface{}{"user": "gordon"}},
 		{"/info/gordon/project/go", false, "/info/:user/project/:project", map[string]interface{}{"user": "gordon", "project": "go"}},
+		{"/info/gordon", true, "/info/:user/project/:project", nil},
 	})
 }
 
@@ -176,8 +178,6 @@ func testRoutes(t *testing.T, routes []testRoute) {
 			t.Errorf("unexpected panic for route '%s': %v", route.path, recv)
 		}
 	}
-
-	//printChildren(tree, "")
 }
 
 func TestTreeWildcardConflict(t *testing.T) {
@@ -185,8 +185,8 @@ func TestTreeWildcardConflict(t *testing.T) {
 		{"/cmd/:tool/:sub", false},
 		{"/cmd/vet", false},
 		{"/src/*filepath", false},
-		{"/src/*filepathx", true},
 		{"/src/", false},
+		{"/src/*filepathx", true},
 		{"/src1/", false},
 		{"/src1/*filepath", false},
 		{"/src2*filepath", true},
@@ -245,8 +245,6 @@ func TestTreeDuplicatePath(t *testing.T) {
 			t.Fatalf("no panic while inserting duplicate route '%s", route)
 		}
 	}
-
-	//printChildren(tree, "")
 
 	checkRequests(t, tree, testRequests{
 		{"/", false, "/", nil},
@@ -321,17 +319,6 @@ func TestTreeDoubleWildcard(t *testing.T) {
 		}
 	}
 }
-
-/*func TestTreeDuplicateWildcard(t *testing.T) {
-	tree := &node{}
-
-	routes := [...]string{
-		"/:id/:name/:id",
-	}
-	for _, route := range routes {
-		...
-	}
-}*/
 
 func TestTreeTrailingSlashRedirect(t *testing.T) {
 	tree := New()
@@ -447,6 +434,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		"/search/:query",
 		"/cmd/:tool/",
 		"/src/*filepath",
+		"/proc/:id/status",
 		"/x",
 		"/x/y",
 		"/y/",
@@ -527,6 +515,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		{"/CMD/TOOL/", "/cmd/TOOL/", true, false},
 		{"/CMD/TOOL", "/cmd/TOOL/", true, true},
 		{"/SRC/FILE/PATH", "/src/FILE/PATH", true, false},
+		{"/ProC/112", "/src/FILE/PATH", false, false},
 		{"/x/Y", "/x/y", true, false},
 		{"/x/Y/", "/x/y", true, true},
 		{"/X/y", "/x/y", true, false},

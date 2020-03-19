@@ -15,7 +15,6 @@ const stackBufSize = 128
 func New() *Tree {
 	return &Tree{
 		root: &node{
-			path:  "/",
 			nType: root,
 		},
 	}
@@ -29,38 +28,37 @@ func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
 		panic("path must begin with '/' in path '" + path + "'")
 	}
 
-	if path == "/" {
-		if t.root.handler != nil {
-			panic("Duplicated path: " + path)
-		}
-
-		t.root.handler = handler
-
-		return
-	}
-
-	n := t.root
 	fullPath := path
 
-	// Checks if the path has a trailing slash
-	tsr := false
-	if strings.HasSuffix(path, "/") {
-		tsr = true
-		path = path[:len(path)-1]
+	i := longestCommonPrefix(path, t.root.path)
+	if i > 0 && len(t.root.path) > i {
+		t.root.split(i)
 	}
 
-	// Remove the initial '/'
-	path = path[1:]
-
-	for {
-		// Recursive addition inside the nodes
-		n, path = n.add(path, fullPath, handler)
-
-		// N
-		if len(path) == 0 {
-			n.tsr = tsr
-			break
+	tsr := false
+	if path != "/" {
+		if strings.HasPrefix(path, t.root.path) {
+			path = path[len(t.root.path):]
 		}
+
+		if strings.HasSuffix(path, "/") {
+			tsr = true
+			path = path[:len(path)-1]
+		}
+
+		if len(path) == 0 {
+			t.root.setHandler(handler, fullPath)
+
+			return
+		}
+	}
+
+	n := t.root.add(path, fullPath, handler)
+	n.tsr = tsr
+
+	if len(t.root.path) == 0 {
+		t.root = t.root.children[0]
+		t.root.nType = root
 	}
 
 	// Reorder the nodes
@@ -75,83 +73,44 @@ func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
 func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 	n := t.root
 
-	if path == "/" {
-		if n.handler != nil {
-			// Found it
+	if len(path) > len(n.path) {
+		if path[:len(n.path)] != n.path {
+			return nil, false
+		}
+
+		path = path[len(n.path):]
+
+		if len(path) == 1 {
+			if path == "/" && n.handler != nil {
+				if n.tsr {
+					return n.handler, false
+				}
+
+				return nil, true
+			}
+		}
+
+		return n.getFromChild(path, ctx)
+
+	} else if path == n.path {
+
+		switch {
+		case n.tsr:
+			return nil, true
+		case n.handler != nil:
 			return n.handler, false
-
-		} else if n.wildcard != nil {
-			// Not found, but the node has a wildcard
-
+		case n.wildcard != nil:
 			if ctx != nil {
 				// Save the wildcard value
-				ctx.SetUserValue(n.wildcard.path[1:], path)
+				ctx.SetUserValue(n.wildcard.path[1:], "/")
 			}
 
 			return n.wildcard.handler, false
 		}
 
-		// Not found
-		return nil, false
 	}
 
-	// Remove the initial '/'
-	path = path[1:]
-
-	for {
-		// Recursive search inside the children nodes
-		n, path = n.get(path, ctx)
-
-		switch {
-		case n == nil:
-			// Not found
-			return nil, false
-
-		case n.nType == wildcard:
-			// Not found, but the node has a wildcard
-
-			if ctx != nil {
-				// Save the wildcard value
-				ctx.SetUserValue(n.path[1:], path)
-			}
-
-			return n.handler, false
-
-		case len(path) == 0:
-			// Search is finished
-
-			if n.tsr {
-				// The handler is found, but the route is registered with a trailing slash.
-				// So tries to force the redirect
-				return nil, true
-
-			} else if n.handler != nil {
-				// Found it
-				return n.handler, false
-
-			} else if n.wildcard != nil {
-				// Not found, but the node has a wildcard
-
-				if ctx != nil {
-					// Save the wildcard value
-					ctx.SetUserValue(n.wildcard.path[1:], "/")
-				}
-
-				return n.wildcard.handler, false
-			}
-
-			return nil, false
-		case path == "/" && n.handler != nil:
-			// Search is finished but the requested path has a trainling slash
-
-			if n.tsr {
-				// Found it, because the path is registered with a trailing slash
-				return n.handler, false
-			}
-
-			return nil, true
-		}
-	}
+	return nil, false
 }
 
 // FindCaseInsensitivePath makes a case-insensitive lookup of the given path
@@ -160,11 +119,6 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 // It returns the case-corrected path and a bool indicating whether the lookup
 // was successful.
 func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool) ([]byte, bool) {
-	n := t.root
-
-	// Remove the initial '/'
-	path = path[1:]
-
 	// Use a static sized buffer on the stack in the common case.
 	// If the path is too long, allocate a buffer on the heap instead.
 	buf := make([]byte, 0, stackBufSize)
@@ -172,56 +126,16 @@ func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool) ([]by
 		buf = make([]byte, 0, l)
 	}
 
-	buf = append(buf, '/')
+	tsr := false
 
-	for {
-		// Recursive case insensitive search inside the children nodes
-		n, path, buf = n.getInsensitive(path, buf)
+	buf, tsr = t.root.find(path, buf)
 
-		switch {
-		case n == nil:
-			// Not found
-			return nil, false
-
-		case n.nType == wildcard:
-			// Not found an static/param path but has a wildcard
-			buf = append(buf, path...)
-
-			return buf, true
-
-		case len(path) == 0:
-			// Search is finished
-
-			if n.handler == nil {
-				// Not found
-				return nil, false
-
-			} else if n.tsr {
-				// Check if the route is registered with a trailing slash
-
-				if !fixTrailingSlash {
-					// Force the non redirect to the requested path with a trailing slash
-					return nil, false
-				}
-
-				buf = append(buf, '/')
-			}
-
-			return buf, true
-
-		case path == "/" && n.handler != nil:
-			// Search is finished but the requested path has a trainling slash
-
-			if n.tsr {
-				// Adds the traling slash because the route is registered with a trailing slash
-				buf = append(buf, '/')
-
-			} else if !fixTrailingSlash {
-				// Force the non redirect to the requested path with a trailing slash
-				return nil, false
-			}
-
-			return buf, true
-		}
+	switch {
+	case buf == nil:
+		return nil, false
+	case tsr && !fixTrailingSlash:
+		return nil, false
 	}
+
+	return buf, true
 }
