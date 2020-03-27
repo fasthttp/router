@@ -7,24 +7,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type nodeType uint8
-
-type node struct {
-	path     string
-	handler  fasthttp.RequestHandler
-	nType    nodeType
-	tsr      bool
-	children []*node
-	wildcard *node
-}
-
-const (
-	root nodeType = iota
-	static
-	param
-	wildcard
-)
-
 // wildPathConflict raises a panic with some details
 func (n *node) wildPathConflict(path, fullPath string) {
 	pathSeg := path
@@ -40,10 +22,33 @@ func (n *node) wildPathConflict(path, fullPath string) {
 		"'")
 }
 
+func (n *node) findEndIndexAndValues(path string) (int, []string) {
+	index := n.paramRegex.FindStringSubmatchIndex(path)
+	if len(index) == 0 {
+		return -1, nil
+	}
+
+	values := []string{}
+	end := index[1]
+	index = index[2:]
+
+	for j := range index {
+		if (j+1)%2 != 0 {
+			continue
+		}
+
+		values = append(values, path[index[j-1]:index[j]])
+	}
+
+	return end, values
+}
+
 func (n *node) split(i int) {
 	cloneChild := n.clone()
 	cloneChild.path = cloneChild.path[i:]
-	cloneChild.nType = pathNodeType(cloneChild.path)
+	cloneChild.nType = static
+	cloneChild.paramKeys = nil
+	cloneChild.paramRegex = nil
 
 	n.path = n.path[:i]
 	n.handler = nil
@@ -61,27 +66,32 @@ func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
 
 func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *node {
 	end := segmentEndIndex(path)
-	newNode := &node{path: path, nType: pathNodeType(path)}
+	newNode := &node{path: path, nType: static}
 
-	wildPath, i, valid := findWildPath(path)
-	if valid && i >= 0 {
+	wp := findWildPath(path, fullPath)
+	if wp != nil {
 		// Finds a valid wilcard/param
 
-		if len(wildPath) < 2 {
-			panic("wildcards must be named with a non-empty name in path '" + fullPath + "'")
-		} else if wildPath[0] == '*' && len(path) == end && (wildPath != path || n.path[len(n.path)-1] != '/') {
+		if wp.pType == wildcard && len(path) == end && n.path[len(n.path)-1] != '/' {
 			panic("no / before wildcard in path '" + fullPath + "'")
 		}
 
 		// Set the index to end the new node path and starts the path of the next node
 		j := end
-		if i > 0 {
+		if wp.start > 0 {
 			// If the wild path index it's greater than 0, sets it as the index
-			j = i
+			j = wp.start
 		}
 
-		newNode.path = path[:j]
-		newNode.nType = pathNodeType(newNode.path)
+		if wp.start == 0 {
+			newNode.path = wp.path
+			newNode.nType = wp.pType
+			newNode.paramKeys = wp.keys
+			newNode.paramRegex = wp.regex
+			j = wp.end
+		} else {
+			newNode.path = path[:j]
+		}
 
 		if newNode.path == "/" && n.handler == nil {
 			// The current path is '/' and it don't has a handler,
@@ -155,19 +165,26 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node
 				return child.add(path[i:], fullPath, handler)
 			}
 		case param:
-			end := segmentEndIndex(path)
+			wp := findWildPath(path, fullPath)
 
-			if path[0] == ':' && len(path) == end && (child.handler != nil || handler == nil) {
+			// if wp == nil {
+			// 	continue
+			// }
+
+			isParam := wp.start == 0 && wp.pType == param
+			hasHandler := child.handler != nil || handler == nil
+
+			if len(path) == wp.end && isParam && hasHandler {
 				// The current segment is a param and it's duplicated
 
 				child.wildPathConflict(path, fullPath)
 			}
 
-			if len(path) > end && path[:end] == child.path {
-				return child.add(path[end:], fullPath, handler)
+			if len(path) > i {
+				if child.path == wp.path {
+					return child.add(path[i:], fullPath, handler)
+				}
 
-			} else if i < 2 {
-				// New param, the common string is ':'
 				return n.insert(path, fullPath, handler)
 			}
 		}
@@ -222,7 +239,9 @@ walk:
 						return child.handler, false
 					case child.wildcard != nil:
 						if ctx != nil {
-							ctx.SetUserValue(child.wildcard.path[1:], path)
+							for _, key := range child.wildcard.paramKeys {
+								ctx.SetUserValue(key, path)
+							}
 						}
 
 						return child.wildcard.handler, false
@@ -233,16 +252,25 @@ walk:
 
 			case param:
 				end := segmentEndIndex(path)
+				values := []string{path[:end]}
+
+				if child.paramRegex != nil {
+					end, values = child.findEndIndexAndValues(path[:end])
+					if end == -1 {
+						continue
+					}
+				}
 
 				if child.handler != nil {
 					if end == len(path) {
-
 						if child.tsr {
 							return nil, true
 						}
 
 						if ctx != nil {
-							ctx.SetUserValue(child.path[1:], path[:end])
+							for i, key := range child.paramKeys {
+								ctx.SetUserValue(key, values[i])
+							}
 						}
 
 						return child.handler, false
@@ -254,7 +282,9 @@ walk:
 						}
 
 						if ctx != nil {
-							ctx.SetUserValue(child.path[1:], path[:end])
+							for i, key := range child.paramKeys {
+								ctx.SetUserValue(key, values[i])
+							}
 						}
 
 						return child.handler, false
@@ -268,8 +298,8 @@ walk:
 				if tsr {
 					return nil, tsr
 				} else if h != nil {
-					if ctx != nil {
-						ctx.SetUserValue(child.path[1:], path[:end])
+					for i, key := range child.paramKeys {
+						ctx.SetUserValue(key, values[i])
 					}
 
 					return h, false
@@ -282,7 +312,7 @@ walk:
 
 		if n.wildcard != nil {
 			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.path[1:], path)
+				ctx.SetUserValue(n.wildcard.paramKeys[0], path)
 			}
 
 			return n.wildcard.handler, false
@@ -339,6 +369,13 @@ func (n *node) findChild(path string, buf []byte) ([]byte, bool) {
 
 		case param:
 			end := segmentEndIndex(path)
+
+			if child.paramRegex != nil {
+				end, _ = child.findEndIndexAndValues(path[:end])
+				if end == -1 {
+					continue
+				}
+			}
 
 			if child.handler != nil {
 				if end == len(path) {
@@ -404,6 +441,15 @@ func (n node) clone() *node {
 			cloneNode.children[i] = child.clone()
 		}
 	}
+
+	if len(n.paramKeys) > 0 {
+		cloneNode.paramKeys = make([]string, len(n.paramKeys))
+
+		for i, key := range n.paramKeys {
+			cloneNode.paramKeys[i] = key
+		}
+	}
+	cloneNode.paramRegex = n.paramRegex
 
 	return cloneNode
 }

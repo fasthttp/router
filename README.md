@@ -98,7 +98,7 @@ func Hello(ctx *fasthttp.RequestCtx) {
 func main() {
 	r := router.New()
 	r.GET("/", Index)
-	r.GET("/hello/:name", Hello)
+	r.GET("/hello/{name}", Hello)
 
 	log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 }
@@ -106,33 +106,48 @@ func main() {
 
 ### Named parameters
 
-As you can see, `:name` is a _named parameter_. The values are accessible via `RequestCtx.UserValues`. You can get the value of a parameter by using the `ctx.UserValue("name")`.
+As you can see, `{name}` is a _named parameter_. The values are accessible via `RequestCtx.UserValues`. You can get the value of a parameter by using the `ctx.UserValue("name")`.
 
 Named parameters only match a single path segment:
 
 ```
-Pattern: /user/:user
+Pattern: /user/{user}
 
- /user/gordon              match
- /user/you                 match
- /user/gordon/profile      no match
- /user/                    no match
+ /user/gordon                     match
+ /user/you                        match
+ /user/gordon/profile             no match
+ /user/                           no match
+
+Pattern with suffix: /user/{user}_admin
+
+ /user/gordon_admin               match
+ /user/you_admin                  match
+ /user/you                        no match
+ /user/gordon/profile             no match
+ /user/gordon_admin/profile       no match
+ /user/                           no match
 ```
 
-**Note:** Since this router has only explicit matches, you can not register static routes and parameters for the same path segment. For example you can not register the patterns `/user/new` and `/user/:user` for the same request method at the same time. The routing of different request methods is independent from each other.
+**Note:** Since this router has only explicit matches, you can not register static routes and parameters for the same path segment. For example you can not register the patterns `/user/new` and `/user/{user}` for the same request method at the same time. The routing of different request methods is independent from each other.
 
 #### Optional parameters
 
-If you need define an optional parameters, add `?` at the end of param name. `:name?`
+If you need define an optional parameters, add `?` at the end of param name. `{name?}`
+
+#### Regex validation
+
+If you need define a validation, you could use a custom regex for the paramater value, add `:<regex>` after the name. For example: `{name:[a-zA-Z]{5}}`.
+
+**_Optional paramters and regex validation are compatibles, only add `?` between the name and the regex. For example: `{name?:[a-zA-Z]{5}}`._**
 
 ### Catch-All parameters
 
-The second type are _catch-all_ parameters and have the form `*name`.
+The second type are _catch-all_ parameters and have the form `{name:*}`.
 Like the name suggests, they match everything.
 Therefore they must always be at the **end** of the pattern:
 
 ```
-Pattern: /src/*filepath
+Pattern: /src/{filepath:*}
 
  /src/                     match
  /src/somefile.go          match
@@ -145,19 +160,19 @@ The router relies on a tree structure which makes heavy use of _common prefixes_
 
 ```
 Priority   Path             Handle
-9          \                *<1>
-3          ├s               nil
-2          |├earch\         *<2>
-1          |└upport\        *<3>
-2          ├blog\           *<4>
-1          |    └:post      nil
-1          |         └\     *<5>
-2          ├about-us\       *<6>
-1          |        └team\  *<7>
-1          └contact\        *<8>
+9          \                 *<1>
+3          ├s                nil
+2          |├earch\          *<2>
+1          |└upport\         *<3>
+2          ├blog\            *<4>
+1          |    └{post}      nil
+1          |          └\     *<5>
+2          ├about-us\        *<6>
+1          |        └team\   *<7>
+1          └contact\         *<8>
 ```
 
-Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\:post\`, where `:post` is just a placeholder ([_parameter_](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `:post` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show][benchmark], this works very well and efficient.
+Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\{post}\`, where `{post}` is just a placeholder ([_parameter_](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `{post}` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show][benchmark], this works very well and efficient.
 
 Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems. Moreover the router manages a separate tree for every request method. For one thing it is more space efficient than holding a method->handle map in every single node, for another thing is also allows us to greatly reduce the routing problem before even starting the look-up in the prefix-tree.
 
@@ -208,7 +223,7 @@ The `NotFound` handler can for example be used to serve static files from the ro
 r.NotFound = fasthttp.FSHandler("./public", 0)
 ```
 
-But this approach sidesteps the strict core rules of this router to avoid routing problems. A cleaner approach is to use a distinct sub-path for serving files, like `/static/*filepath` or `/files/*filepath`.
+But this approach sidesteps the strict core rules of this router to avoid routing problems. A cleaner approach is to use a distinct sub-path for serving files, like `/static/{filepath:*}` or `/files/{filepath:*}`.
 
 ## Web Frameworks based on Router
 

@@ -6,6 +6,7 @@
 package router
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -142,24 +143,39 @@ func TestGetOptionalPath(t *testing.T) {
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
-	expectedPaths := []string{
-		"/show/:name",
-		"/show/:name/:surname",
-		"/show/:name/:surname/at",
-		"/show/:name/:surname/at/:address",
-		"/show/:name/:surname/at/:address/:id",
-		"/show/:name/:surname/at/:address/:id/:phone",
+	expected := []struct {
+		path    string
+		tsr     bool
+		handler fasthttp.RequestHandler
+	}{
+		{"/show/{name}", true, nil},
+		{"/show/{name}/", false, handler},
+		{"/show/{name}/{surname}", true, nil},
+		{"/show/{name}/{surname}/", false, handler},
+		{"/show/{name}/{surname}/at", true, nil},
+		{"/show/{name}/{surname}/at/", false, handler},
+		{"/show/{name}/{surname}/at/{address}", true, nil},
+		{"/show/{name}/{surname}/at/{address}/", false, handler},
+		{"/show/{name}/{surname}/at/{address}/{id}", true, nil},
+		{"/show/{name}/{surname}/at/{address}/{id}/", false, handler},
+		{"/show/{name}/{surname}/at/{address}/{id}/{phone:.*}", false, handler},
+		{"/show/{name}/{surname}/at/{address}/{id}/{phone:.*}/", true, nil},
 	}
-	r := New()
-	r.GET("/show/:name/:surname?/at/:address?/:id/:phone?", handler)
 
-	for _, path := range expectedPaths {
+	r := New()
+	r.GET("/show/{name}/{surname?}/at/{address?}/{id}/{phone?:.*}", handler)
+
+	for _, e := range expected {
 		ctx := new(fasthttp.RequestCtx)
 
-		h, _ := r.Lookup("GET", path, ctx)
+		h, tsr := r.Lookup("GET", e.path, ctx)
 
-		if h == nil {
-			t.Errorf("Expected optional path '%s' is not registered", path)
+		if tsr != e.tsr {
+			t.Errorf("TSR (path: %s) == %v, want %v", e.path, tsr, e.tsr)
+		}
+
+		if reflect.ValueOf(h).Pointer() != reflect.ValueOf(e.handler).Pointer() {
+			t.Errorf("Handler (path: %s) == %p, want %p", e.path, h, e.handler)
 		}
 	}
 }

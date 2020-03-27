@@ -1,7 +1,6 @@
 package radix
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -63,7 +62,7 @@ func Test_Tree(t *testing.T) {
 	}{
 		{
 			args: args{
-				path:          "/users/:name",
+				path:          "/users/{name}",
 				requestedPath: "/users/atreugo",
 				handler:       generateHandler(),
 			},
@@ -95,7 +94,7 @@ func Test_Tree(t *testing.T) {
 		},
 		{
 			args: args{
-				path:          "/users/:name/jobs",
+				path:          "/users/{name}/jobs",
 				requestedPath: "/users/atreugo/jobs",
 				handler:       generateHandler(),
 			},
@@ -117,7 +116,7 @@ func Test_Tree(t *testing.T) {
 		},
 		{
 			args: args{
-				path:          "/users/:status/proc",
+				path:          "/users/{status}/proc",
 				requestedPath: "/users/active/proc",
 				handler:       generateHandler(),
 			},
@@ -129,7 +128,7 @@ func Test_Tree(t *testing.T) {
 		},
 		{
 			args: args{
-				path:          "/static/*filepath",
+				path:          "/static/{filepath:*}",
 				requestedPath: "/static/assets/js/main.js",
 				handler:       generateHandler(),
 			},
@@ -159,7 +158,7 @@ func Test_Tree(t *testing.T) {
 	testHandlerAndParams(t, tree, "/fuck/notfound", nil, false, emptyParams)
 
 	filepathHandler := generateHandler()
-	tree.Add("/*filepath", filepathHandler)
+	tree.Add("/{filepath:*}", filepathHandler)
 
 	testHandlerAndParams(t, tree, "/js/main.js", filepathHandler, false, map[string]interface{}{
 		"filepath": "js/main.js",
@@ -182,11 +181,44 @@ func Test_Get(t *testing.T) {
 	testHandlerAndParams(t, tree, "/data", nil, false, nil)
 }
 
+func Test_AddWithParam(t *testing.T) {
+	handler := generateHandler()
+
+	tree := New()
+	tree.Add("/test", handler)
+	tree.Add("/api/prefix{version:V[0-9]}_{name:[a-z]+}_sufix/files", handler)
+	tree.Add("/api/prefix{version:V[0-9]}_{name:[a-z]+}_sufix/data", handler)
+	tree.Add("/api/prefix/files", handler)
+	tree.Add("/prefix{name:[a-z]+}suffix/data", handler)
+	tree.Add("/prefix{name:[a-z]+}/data", handler)
+	tree.Add("/api/{file}.json", handler)
+
+	testHandlerAndParams(t, tree, "/api/prefixV1_atreugo_sufix/files", handler, false, map[string]interface{}{
+		"version": "V1", "name": "atreugo",
+	})
+	testHandlerAndParams(t, tree, "/api/prefixV1_atreugo_sufix/data", handler, false, map[string]interface{}{
+		"version": "V1", "name": "atreugo",
+	})
+	testHandlerAndParams(t, tree, "/prefixatreugosuffix/data", handler, false, map[string]interface{}{
+		"name": "atreugo",
+	})
+	testHandlerAndParams(t, tree, "/prefixatreugo/data", handler, false, map[string]interface{}{
+		"name": "atreugo",
+	})
+	testHandlerAndParams(t, tree, "/api/name.json", handler, false, map[string]interface{}{
+		"file": "name",
+	})
+
+	// Not found
+	testHandlerAndParams(t, tree, "/api/prefixV1_1111_sufix/fake", nil, false, nil)
+
+}
+
 func Test_TreeRootWildcard(t *testing.T) {
 	tree := New()
 
 	handler := generateHandler()
-	tree.Add("/*filepath", handler)
+	tree.Add("/{filepath:*}", handler)
 
 	testHandlerAndParams(t, tree, "/", handler, false, map[string]interface{}{
 		"filepath": "/",
@@ -196,11 +228,11 @@ func Test_TreeRootWildcard(t *testing.T) {
 func Benchmark_Get(b *testing.B) {
 	tree := New()
 
-	for i := 0; i < 3000; i++ {
-		tree.Add(
-			fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 15))), generateHandler(),
-		)
-	}
+	// for i := 0; i < 3000; i++ {
+	// 	tree.Add(
+	// 		fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 15))), generateHandler(),
+	// 	)
+	// }
 
 	tree.Add("/plaintext", generateHandler())
 	tree.Add("/json", generateHandler())
@@ -215,7 +247,35 @@ func Benchmark_Get(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		tree.Get("/fortune-quick", ctx)
+		tree.Get("/update", ctx)
+	}
+}
+
+func Benchmark_GetWithRegex(b *testing.B) {
+	tree := New()
+
+	tree.Add("/api/{version:v[0-9]}/data", generateHandler())
+
+	ctx := new(fasthttp.RequestCtx)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		tree.Get("/api/v1211/data", ctx)
+	}
+}
+
+func Benchmark_GetWithParams(b *testing.B) {
+	tree := New()
+
+	tree.Add("/api/{version}/data", generateHandler())
+
+	ctx := new(fasthttp.RequestCtx)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		tree.Get("/api/v1211/data", ctx)
 	}
 }
 

@@ -1,6 +1,10 @@
 package radix
 
-import "unicode/utf8"
+import (
+	"regexp"
+	"strings"
+	"unicode/utf8"
+)
 
 func min(a, b int) int {
 	if a <= b {
@@ -50,39 +54,97 @@ func segmentEndIndex(path string) int {
 	return end
 }
 
-// pathNodeType returns the node type of the given path
-func pathNodeType(path string) nodeType {
-	switch path[0] {
-	case ':':
-		return param
-	case '*':
-		return wildcard
-	}
-
-	return static
-}
-
 // findWildPath search for a wild path segment and check the name for invalid characters.
 // Returns -1 as index, if no param/wildcard was found.
-func findWildPath(path string) (wilcard string, i int, valid bool) {
+func findWildPath(path string, fullPath string) *wildPath {
 	// Find start
 	for start, c := range []byte(path) {
 		// A wildcard starts with ':' (param) or '*' (wildcard)
-		if c != ':' && c != '*' {
+		if c != '{' {
 			continue
 		}
 
+		withRegex := false
+		keys := 0
+
 		// Find end and check for invalid characters
-		valid = true
 		for end, c := range []byte(path[start+1:]) {
 			switch c {
-			case '/':
-				return path[start : start+1+end], start, valid
-			case ':', '*':
-				panic("only one wildcard per path segment is allowed")
+			case '}':
+				if keys > 0 {
+					keys--
+					continue
+				}
+
+				end := start + end + 2
+				wp := &wildPath{
+					path:  path[start:end],
+					keys:  []string{path[start+1 : end-1]},
+					start: start,
+					end:   end,
+					pType: param,
+				}
+
+				if len(path) > end && path[end] == '{' {
+					panic("the wildcards must be separated by at least 1 char")
+				}
+
+				sn := strings.SplitN(wp.keys[0], ":", 2)
+				if len(sn) > 1 {
+					wp.keys = []string{sn[0]}
+					pattern := sn[1]
+
+					if pattern == "*" {
+						wp.pattern = pattern
+						wp.pType = wildcard
+					} else {
+						wp.pattern = "(" + pattern + ")"
+						wp.regex = regexp.MustCompile(wp.pattern)
+					}
+				} else {
+					wp.pattern = "(.*)"
+				}
+
+				if len(wp.keys[0]) == 0 {
+					panic("wildcards must be named with a non-empty name in path '" + fullPath + "'")
+				}
+
+				segEnd := end + segmentEndIndex(path[end:])
+				path = path[end:segEnd]
+
+				if len(path) > 0 {
+					// Rebuild the wildpath with the prefix
+					wp2 := findWildPath(path, fullPath)
+					if wp2 != nil {
+						prefix := path[:wp2.start]
+
+						wp.end += wp2.end
+						wp.path += prefix + wp2.path
+						wp.pattern += prefix + wp2.pattern
+						wp.keys = append(wp.keys, wp2.keys...)
+					} else {
+						wp.path += path
+						wp.pattern += path
+						wp.end += len(path)
+					}
+
+					wp.regex = regexp.MustCompile(wp.pattern)
+				}
+
+				return wp
+
+			case ':':
+				withRegex = true
+
+			case '{':
+				if !withRegex && keys == 0 {
+					panic("the char '{' is not allowed in the param name")
+				}
+
+				keys++
 			}
 		}
-		return path[start:], start, valid
 	}
-	return "", -1, false
+
+	return nil
 }

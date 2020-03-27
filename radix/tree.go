@@ -6,12 +6,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type Tree struct {
-	root *node
-}
-
-const stackBufSize = 128
-
 func New() *Tree {
 	return &Tree{
 		root: &node{
@@ -101,7 +95,7 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 			return n.handler, false
 		case n.wildcard != nil:
 			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.path[1:], "/")
+				ctx.SetUserValue(n.wildcard.paramKeys[0], "/")
 			}
 
 			return n.wildcard.handler, false

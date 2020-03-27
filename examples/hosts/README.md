@@ -50,7 +50,7 @@ func main() {
 	// Initialize a router as usual
 	r := router.New()
 	r.GET("/", Index)
-	r.GET("/hello/:name", Hello)
+	r.GET("/hello/{name}", Hello)
 
 	// Make a new HostSwitch and insert the router (our http handler)
 	// for example.com and port 12345

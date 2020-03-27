@@ -96,7 +96,7 @@ func TestRouter(t *testing.T) {
 	router := New()
 
 	routed := false
-	router.Handle(fasthttp.MethodGet, "/user/:name", func(ctx *fasthttp.RequestCtx) {
+	router.Handle(fasthttp.MethodGet, "/user/{name}", func(ctx *fasthttp.RequestCtx) {
 		routed = true
 		want := "gopher"
 
@@ -316,8 +316,8 @@ func TestRouterGroup(t *testing.T) {
 		hit = true
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
-	r6.ServeFiles("/static/*filepath", "./")
-	r6.ServeFilesCustom("/custom/static/*filepath", &fasthttp.FS{Root: "./"})
+	r6.ServeFiles("/static/{filepath:*}", "./")
+	r6.ServeFilesCustom("/custom/static/{filepath:*}", &fasthttp.FS{Root: "./"})
 
 	uris := []string{
 		"POST /foo HTTP/1.1\r\n\r\n",
@@ -506,9 +506,9 @@ func TestRouterNotFound(t *testing.T) {
 	router.GET("/path", handlerFunc)
 	router.GET("/dir/", handlerFunc)
 	router.GET("/", handlerFunc)
-	router.GET("/:proc/StaTus", handlerFunc)
-	router.GET("/USERS/:name/enTRies/", handlerFunc)
-	router.GET("/static/*filepath", handlerFunc)
+	router.GET("/{proc}/StaTus", handlerFunc)
+	router.GET("/USERS/{name}/enTRies/", handlerFunc)
+	router.GET("/static/{filepath:*}", handlerFunc)
 
 	testRoutes := []struct {
 		route    string
@@ -595,7 +595,7 @@ func TestRouterPanicHandler(t *testing.T) {
 		panicHandled = true
 	}
 
-	router.Handle(fasthttp.MethodPut, "/user/:name", func(ctx *fasthttp.RequestCtx) {
+	router.Handle(fasthttp.MethodPut, "/user/{name}", func(ctx *fasthttp.RequestCtx) {
 		panic("oops!")
 	})
 
@@ -636,7 +636,7 @@ func TestRouterLookup(t *testing.T) {
 	}
 
 	// insert route and try again
-	router.GET("/user/:name", wantHandle)
+	router.GET("/user/{name}", wantHandle)
 	handle, _ = router.Lookup(fasthttp.MethodGet, "/user/gopher", ctx)
 	if handle == nil {
 		t.Fatal("Got no handle!")
@@ -691,7 +691,7 @@ func TestRouterLookup(t *testing.T) {
 }
 
 func TestRouterMatchedRoutePath(t *testing.T) {
-	route1 := "/user/:name"
+	route1 := "/user/{name}"
 	routed1 := false
 	handle1 := func(ctx *fasthttp.RequestCtx) {
 		route := ctx.UserValue(MatchedRoutePathParam)
@@ -701,7 +701,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 		routed1 = true
 	}
 
-	route2 := "/user/:name/details"
+	route2 := "/user/{name}/details"
 	routed2 := false
 	handle2 := func(ctx *fasthttp.RequestCtx) {
 		route := ctx.UserValue(MatchedRoutePathParam)
@@ -758,12 +758,12 @@ func TestRouterServeFiles(t *testing.T) {
 		r.ServeFiles("/noFilepath", os.TempDir())
 	})
 	if recv == nil {
-		t.Fatal("registering path not ending with '*filepath' did not panic")
+		t.Fatal("registering path not ending with '{filepath:*}' did not panic")
 	}
 	body := []byte("fake ico")
 	ioutil.WriteFile(os.TempDir()+"/favicon.ico", body, 0644)
 
-	r.ServeFiles("/*filepath", os.TempDir())
+	r.ServeFiles("/{filepath:*}", os.TempDir())
 
 	assertWithTestServer(t, "GET /favicon.ico HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
 		br := bufio.NewReader(&rw.w)
@@ -772,7 +772,7 @@ func TestRouterServeFiles(t *testing.T) {
 			t.Fatalf("Unexpected error when reading response: %s", err)
 		}
 		if resp.Header.StatusCode() != 200 {
-			t.Fatalf("Unexpected status code %d. Expected %d", resp.Header.StatusCode(), 423)
+			t.Fatalf("Unexpected status code %d. Expected %d", resp.Header.StatusCode(), 200)
 		}
 		if !bytes.Equal(resp.Body(), body) {
 			t.Fatalf("Unexpected body %q. Expected %q", resp.Body(), string(body))
@@ -793,12 +793,12 @@ func TestRouterServeFilesCustom(t *testing.T) {
 		r.ServeFilesCustom("/noFilepath", fs)
 	})
 	if recv == nil {
-		t.Fatal("registering path not ending with '*filepath' did not panic")
+		t.Fatal("registering path not ending with '{filepath:*}' did not panic")
 	}
 	body := []byte("fake ico")
 	ioutil.WriteFile(root+"/favicon.ico", body, 0644)
 
-	r.ServeFilesCustom("/*filepath", fs)
+	r.ServeFilesCustom("/{filepath:*}", fs)
 
 	assertWithTestServer(t, "GET /favicon.ico HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
 		br := bufio.NewReader(&rw.w)
@@ -819,8 +819,8 @@ func TestRouterList(t *testing.T) {
 	expected := map[string][]string{
 		"GET":    []string{"/bar"},
 		"PATCH":  []string{"/foo"},
-		"POST":   []string{"/v1/users/:name/:surname?"},
-		"DELETE": []string{"/v1/users/:id?"},
+		"POST":   []string{"/v1/users/{name}/{surname?}"},
+		"DELETE": []string{"/v1/users/{id?}"},
 	}
 
 	r := New()
@@ -828,8 +828,8 @@ func TestRouterList(t *testing.T) {
 	r.PATCH("/foo", func(ctx *fasthttp.RequestCtx) {})
 
 	v1 := r.Group("/v1")
-	v1.POST("/users/:name/:surname?", func(ctx *fasthttp.RequestCtx) {})
-	v1.DELETE("/users/:id?", func(ctx *fasthttp.RequestCtx) {})
+	v1.POST("/users/{name}/{surname?}", func(ctx *fasthttp.RequestCtx) {})
+	v1.DELETE("/users/{id?}", func(ctx *fasthttp.RequestCtx) {})
 
 	result := r.List()
 

@@ -26,7 +26,7 @@
 //  func main() {
 //      r := router.New()
 //      r.GET("/", Index)
-//      r.GET("/hello/:name", Hello)
+//      r.GET("/hello/{name}", Hello)
 //
 //      log.Fatal(fasthttp.ListenAndServe(":8080", r.Handler))
 //  }
@@ -39,13 +39,13 @@
 //
 // The registered path, against which the router matches incoming requests, can
 // contain two types of parameters:
-//  Syntax    Type
-//  :name     named parameter
-//  *name     catch-all parameter
+//  Syntax    	Type
+//  {name}     	named parameter
+//  {name:*}	catch-all parameter
 //
 // Named parameters are dynamic path segments. They match anything until the
 // next '/' or the path end:
-//  Path: /blog/:category/:post
+//  Path: /blog/{category}/{post}
 //
 //  Requests:
 //   /blog/go/request-routers            match: category="go", post="request-routers"
@@ -56,7 +56,7 @@
 // Catch-all parameters match anything until the path end, including the
 // directory index (the '/' before the catch-all). Since they match anything
 // until the end, catch-all parameters must always be the final path element.
-//  Path: /files/*filepath
+//  Path: /files/{filepath:*}
 //
 //  Requests:
 //   /files/                             match: filepath="/"
@@ -68,7 +68,7 @@
 // each of a key and a value. The slice is passed to the Handle func as a third
 // parameter.
 // To retrieve the value of a parameter,gets by the name of the parameter
-//  user := ctx.UserValue("user") // defined by :user or *user
+//  user := ctx.UserValue("user") // defined by {user} or {user:*}
 package router
 
 import (
@@ -291,16 +291,18 @@ func (r *Router) Handle(method, path string, handle fasthttp.RequestHandler) {
 }
 
 // ServeFiles serves files from the given file system root.
-// The path must end with "/*filepath", files are then served from the local
-// path /defined/root/dir/*filepath.
-// For example if root is "/etc" and *filepath is "passwd", the local file
+// The path must end with "/{filepath:*}", files are then served from the local
+// path /defined/root/dir/{filepath:*}.
+// For example if root is "/etc" and {filepath:*} is "passwd", the local file
 // "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // Use:
-//     router.ServeFiles("/src/*filepath", "./")
+//     router.ServeFiles("/src/{filepath:*}", "./")
 func (r *Router) ServeFiles(path string, rootPath string) {
-	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
-		panic("path must end with /*filepath in path '" + path + "'")
+	suffix := "/{filepath:*}"
+
+	if !strings.HasSuffix(path, suffix) {
+		panic("path must end with " + suffix + " in path '" + path + "'")
 	}
 
 	if r.beginPath != "/" {
@@ -312,7 +314,7 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 		return
 	}
 
-	prefix := path[:len(path)-10]
+	prefix := path[:len(path)-len(suffix)]
 	fileHandler := fasthttp.FSHandler(rootPath, strings.Count(prefix, "/"))
 
 	r.GET(path, func(ctx *fasthttp.RequestCtx) {
@@ -321,17 +323,19 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 }
 
 // ServeFilesCustom serves files from the given file system settings.
-// The path must end with "/*filepath", files are then served from the local
-// path /defined/root/dir/*filepath.
-// For example if root is "/etc" and *filepath is "passwd", the local file
+// The path must end with "/{filepath:*}", files are then served from the local
+// path /defined/root/dir/{filepath:*}.
+// For example if root is "/etc" and {filepath:*} is "passwd", the local file
 // "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // of the Router's NotFound handler.
 // Use:
-//     router.ServeFilesCustom("/src/*filepath", *customFS)
+//     router.ServeFilesCustom("/src/{filepath:*}", *customFS)
 func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
-	if len(path) < 10 || path[len(path)-10:] != "/*filepath" {
-		panic("path must end with /*filepath in path '" + path + "'")
+	suffix := "/{filepath:*}"
+
+	if !strings.HasSuffix(path, suffix) {
+		panic("path must end with " + suffix + " in path '" + path + "'")
 	}
 
 	if r.beginPath != "/" {
@@ -343,7 +347,7 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 		return
 	}
 
-	prefix := path[:len(path)-10]
+	prefix := path[:len(path)-len(suffix)]
 	stripSlashes := strings.Count(prefix, "/")
 
 	if fs.PathRewrite == nil && stripSlashes > 0 {
@@ -369,13 +373,9 @@ func (r *Router) recv(ctx *fasthttp.RequestCtx) {
 // the same path with an extra / without the trailing slash should be performed.
 func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 	if root := r.trees[method]; root != nil {
-		handle, tsr := root.Get(path, ctx)
-		if handle == nil {
-			return nil, tsr
-		}
-
-		return handle, tsr
+		return root.Get(path, ctx)
 	}
+
 	return nil, false
 }
 

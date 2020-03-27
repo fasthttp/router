@@ -5,11 +5,7 @@
 
 package router
 
-import (
-	"strings"
-
-	"github.com/savsgio/gotils"
-)
+import "github.com/savsgio/gotils"
 
 const stackBufSize = 128
 
@@ -159,29 +155,53 @@ func bufApp(buf *[]byte, s string, w int, c byte) {
 func getOptionalPaths(path string) []string {
 	paths := make([]string, 0)
 
-	index := 0
-	newParam := false
-	for i := 0; i < len(path); i++ {
-		c := path[i]
+	start := 0
+walk:
+	for {
+		if start >= len(path) {
+			return paths
+		}
 
-		if c == ':' {
-			index = i
-			newParam = true
-		} else if i > 0 && newParam && c == '?' {
-			p := strings.Replace(path[:index], "?", "", -1)
-			p = p[:len(p)-1]
-			if !gotils.StringSliceInclude(paths, p) {
-				paths = append(paths, p)
+		c := path[start]
+		start++
+
+		if c != '{' {
+			continue
+		}
+
+		newPath := ""
+		questionMarkIndex := -1
+
+		for end, c := range []byte(path[start:]) {
+			switch c {
+			case '}':
+				if questionMarkIndex == -1 {
+					continue walk
+				}
+
+				end++
+				if len(path) > start+end && path[start+end] == '/' {
+					// Include trailing slash for a better lookup
+					end++
+				}
+
+				newPath += path[questionMarkIndex+1 : start+end]
+
+				path = path[:questionMarkIndex] + path[questionMarkIndex+1:] // remove '?'
+				paths = append(paths, newPath)
+				start += end - 1
+
+				continue walk
+
+			case '?':
+				questionMarkIndex = start + end
+				newPath += path[:questionMarkIndex]
+
+				// include the path without the wildcard
+				if !gotils.StringSliceInclude(paths, path[:start-1]) {
+					paths = append(paths, path[:start-1])
+				}
 			}
-
-			p = strings.Replace(path[:i], "?", "", -1)
-			if !gotils.StringSliceInclude(paths, p) {
-				paths = append(paths, p)
-			}
-
-			newParam = false
 		}
 	}
-
-	return paths
 }
