@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/valyala/bytebufferpool"
 )
 
 func min(a, b int) int {
@@ -11,6 +13,10 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func bufferRemoveString(buf *bytebufferpool.ByteBuffer, s string) {
+	buf.B = buf.B[:len(buf.B)-len(s)]
 }
 
 // func isIndexEqual(a, b string) bool {

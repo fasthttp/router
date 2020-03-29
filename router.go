@@ -83,7 +83,7 @@ import (
 
 var (
 	defaultContentType = []byte("text/plain; charset=utf-8")
-	questionMark       = []byte("?")
+	questionMark       = byte('?')
 )
 
 // MatchedRoutePathParam is the param name under which the path of the matched
@@ -462,7 +462,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 				queryBuf := ctx.URI().QueryString()
 				if len(queryBuf) > 0 {
-					uri.Write(questionMark)
+					uri.WriteByte(questionMark)
 					uri.Write(queryBuf)
 				}
 
@@ -474,18 +474,24 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 			// Try to fix the request path
 			if r.RedirectFixedPath {
-				fixedPath, found := root.FindCaseInsensitivePath(
+				uri := bytebufferpool.Get()
+				found := root.FindCaseInsensitivePath(
 					CleanPath(path),
 					r.RedirectTrailingSlash,
+					uri,
 				)
+
 				if found {
 					queryBuf := ctx.URI().QueryString()
 					if len(queryBuf) > 0 {
-						fixedPath = append(fixedPath, questionMark...)
-						fixedPath = append(fixedPath, queryBuf...)
+						uri.WriteByte(questionMark)
+						uri.Write(queryBuf)
 					}
 
-					ctx.RedirectBytes(fixedPath, code)
+					ctx.RedirectBytes(uri.Bytes(), code)
+
+					bytebufferpool.Put(uri)
+
 					return
 				}
 			}

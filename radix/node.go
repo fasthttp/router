@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
@@ -322,49 +323,53 @@ walk:
 	}
 }
 
-func (n *node) find(path string, buf []byte) ([]byte, bool) {
+func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	if len(path) > len(n.path) {
 		if strings.EqualFold(path[:len(n.path)], n.path) {
 
 			path = path[len(n.path):]
-			buf = append(buf, n.path...)
+			buf.WriteString(n.path)
 
 			if len(path) == 1 {
 				if path == "/" && n.handler != nil {
 					if n.tsr {
-						buf = append(buf, '/')
+						buf.WriteByte('/')
 
-						return buf, false
+						return true, false
 					}
 
-					return buf, true
+					return true, true
 				}
 			}
 
-			return n.findChild(path, buf)
+			found, tsr := n.findChild(path, buf)
+			if found {
+				return found, tsr
+			}
+
+			bufferRemoveString(buf, n.path)
 		}
 	} else if strings.EqualFold(path, n.path) && n.handler != nil {
-		buf = append(buf, n.path...)
+		buf.WriteString(n.path)
 
 		if n.tsr {
-			buf = append(buf, '/')
-
-			return buf, true
+			buf.WriteByte('/')
+			return true, true
 		}
 
-		return buf, false
+		return true, false
 	}
 
-	return nil, false
+	return false, false
 }
 
-func (n *node) findChild(path string, buf []byte) ([]byte, bool) {
+func (n *node) findChild(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	for _, child := range n.children {
 		switch child.nType {
 		case static:
-			buf2, tsr := child.find(path, buf)
-			if buf2 != nil || tsr {
-				return buf2, tsr
+			found, tsr := child.find(path, buf)
+			if found {
+				return found, tsr
 			}
 
 		case param:
@@ -377,36 +382,39 @@ func (n *node) findChild(path string, buf []byte) ([]byte, bool) {
 				}
 			}
 
+			buf.WriteString(path[:end])
+
 			if child.handler != nil {
 				if end == len(path) {
-					buf = append(buf, path...)
-
 					if child.tsr {
-						buf = append(buf, '/')
+						buf.WriteByte('/')
 
-						return buf, true
+						return true, true
 					}
 
-					return buf, false
+					return true, false
+
 				} else if path[end:] == "/" {
-					buf = append(buf, path[:end]...)
-
 					if child.tsr {
-						buf = append(buf, '/')
+						buf.WriteByte('/')
 
-						return buf, false
+						return true, false
 					}
 
-					return buf, true
+					return true, true
 				}
 			} else if len(path[end:]) == 0 {
-				return nil, false
+				bufferRemoveString(buf, path[:end])
+
+				return false, false
 			}
 
-			buf2, tsr := child.findChild(path[end:], append(buf, path[:end]...))
-			if buf2 != nil || tsr {
-				return buf2, tsr
+			found, tsr := child.findChild(path[end:], buf)
+			if found {
+				return found, tsr
 			}
+
+			bufferRemoveString(buf, path[:end])
 
 		default:
 			panic("invalid node type")
@@ -414,12 +422,12 @@ func (n *node) findChild(path string, buf []byte) ([]byte, bool) {
 	}
 
 	if n.wildcard != nil {
-		buf = append(buf, path...)
+		buf.WriteString(path)
 
-		return buf, false
+		return true, false
 	}
 
-	return nil, false
+	return false, false
 }
 
 // clone clones the current node in a new pointer

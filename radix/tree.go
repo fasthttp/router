@@ -3,6 +3,7 @@ package radix
 import (
 	"strings"
 
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
@@ -111,24 +112,14 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 // It can optionally also fix trailing slashes.
 // It returns the case-corrected path and a bool indicating whether the lookup
 // was successful.
-func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool) ([]byte, bool) {
-	// Use a static sized buffer on the stack in the common case.
-	// If the path is too long, allocate a buffer on the heap instead.
-	buf := make([]byte, 0, stackBufSize)
-	if l := len(path) + 1; l > stackBufSize {
-		buf = make([]byte, 0, l)
+func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool, buf *bytebufferpool.ByteBuffer) bool {
+	found, tsr := t.root.find(path, buf)
+
+	if !found || (tsr && !fixTrailingSlash) {
+		buf.Reset()
+
+		return false
 	}
 
-	tsr := false
-
-	buf, tsr = t.root.find(path, buf)
-
-	switch {
-	case buf == nil:
-		return nil, false
-	case tsr && !fixTrailingSlash:
-		return nil, false
-	}
-
-	return buf, true
+	return true
 }

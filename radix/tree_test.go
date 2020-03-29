@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/savsgio/gotils"
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
@@ -283,9 +284,11 @@ func Benchmark_FindCaseInsensitivePath(b *testing.B) {
 	tree := New()
 	tree.Add("/endpoint", generateHandler())
 
+	buf := bytebufferpool.Get()
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		tree.FindCaseInsensitivePath("/ENdpOiNT", false)
+		tree.FindCaseInsensitivePath("/ENdpOiNT", false, buf)
 	}
 }

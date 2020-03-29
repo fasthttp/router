@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
@@ -469,24 +470,30 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		}
 	}
 
+	buf := bytebufferpool.Get()
+
 	// Check out == in for all registered routes
 	// With fixTrailingSlash = true
 	for _, route := range routes {
-		out, found := tree.FindCaseInsensitivePath(route, true)
+		found := tree.FindCaseInsensitivePath(route, true, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
-		} else if string(out) != route {
-			t.Errorf("Wrong result for route '%s': %s", route, string(out))
+		} else if out := buf.String(); out != route {
+			t.Errorf("Wrong result for route '%s': %s", route, out)
 		}
+
+		buf.Reset()
 	}
 	// With fixTrailingSlash = false
 	for _, route := range routes {
-		out, found := tree.FindCaseInsensitivePath(route, false)
+		found := tree.FindCaseInsensitivePath(route, false, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
-		} else if string(out) != route {
-			t.Errorf("Wrong result for route '%s': %s", route, string(out))
+		} else if out := buf.String(); out != route {
+			t.Errorf("Wrong result for route '%s': %s", route, out)
 		}
+
+		buf.Reset()
 	}
 
 	tests := []struct {
@@ -514,6 +521,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		{"/RegEx/a1b2_test/DaTA", "/regex/a1b2_test/data", true, false},
 		{"/RegEx/A1B2_test/DaTA/", "/regex/A1B2_test/data", true, true},
 		{"/RegEx/blabla/DaTA/", "", false, false},
+		{"/RegEx/blabla_test/fail", "", false, false},
 		{"/x/Y", "/x/y", true, false},
 		{"/x/Y/", "/x/y", true, true},
 		{"/X/y", "/x/y", true, false},
@@ -559,25 +567,29 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = true
 	for _, test := range tests {
-		out, found := tree.FindCaseInsensitivePath(test.in, true)
-		if found != test.found || (found && (string(out) != test.out)) {
+		found := tree.FindCaseInsensitivePath(test.in, true, buf)
+		if out := buf.String(); found != test.found || (found && (out != test.out)) {
 			t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
 				test.in, string(out), found, test.out, test.found)
 		}
+
+		buf.Reset()
 	}
 	// With fixTrailingSlash = false
 	for _, test := range tests {
-		out, found := tree.FindCaseInsensitivePath(test.in, false)
+		found := tree.FindCaseInsensitivePath(test.in, false, buf)
 		if test.slash {
 			if found { // test needs a trailingSlash fix. It must not be found!
-				t.Errorf("Found without fixTrailingSlash: %s; got %s", test.in, string(out))
+				t.Errorf("Found without fixTrailingSlash: %s; got %s", test.in, buf.String())
 			}
 		} else {
-			if found != test.found || (found && (string(out) != test.out)) {
+			if out := buf.String(); found != test.found || (found && (out != test.out)) {
 				t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
-					test.in, string(out), found, test.out, test.found)
+					test.in, out, found, test.out, test.found)
 			}
 		}
+
+		buf.Reset()
 	}
 }
 
@@ -599,9 +611,11 @@ func TestTreeInvalidNodeType(t *testing.T) {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
 	}
 
+	buf := bytebufferpool.Get()
+
 	// case-insensitive lookup
 	recv = catchPanic(func() {
-		tree.FindCaseInsensitivePath("/test", true)
+		tree.FindCaseInsensitivePath("/test", true, buf)
 	})
 	if rs, ok := recv.(string); !ok || rs != panicMsg {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
