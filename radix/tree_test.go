@@ -255,14 +255,14 @@ func Benchmark_Get(b *testing.B) {
 func Benchmark_GetWithRegex(b *testing.B) {
 	tree := New()
 
-	tree.Add("/api/{version:v[0-9]}/data", generateHandler())
+	tree.Add("/api/{version:v[0-9]}_{version:v[0-9]}/data", generateHandler())
 
 	ctx := new(fasthttp.RequestCtx)
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		tree.Get("/api/v1211/data", ctx)
+		tree.Get("/api/v1_v2/data", ctx)
 	}
 }
 

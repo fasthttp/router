@@ -29,16 +29,20 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 		return -1, nil
 	}
 
-	values := []string{}
 	end := index[1]
-	index = index[2:]
 
+	index = index[2:]
+	values := make([]string, len(index)/2)
+
+	i := 0
 	for j := range index {
 		if (j+1)%2 != 0 {
 			continue
 		}
 
-		values = append(values, path[index[j-1]:index[j]])
+		values[i] = path[index[j-1]:index[j]]
+
+		i++
 	}
 
 	return end, values
