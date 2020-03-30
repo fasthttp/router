@@ -128,8 +128,6 @@ Pattern with suffix: /user/{user}_admin
  /user/                           no match
 ```
 
-**Note:** Since this router has only explicit matches, you can not register static routes and parameters for the same path segment. For example you can not register the patterns `/user/new` and `/user/{user}` for the same request method at the same time. The routing of different request methods is independent from each other.
-
 #### Optional parameters
 
 If you need define an optional parameters, add `?` at the end of param name. `{name?}`
