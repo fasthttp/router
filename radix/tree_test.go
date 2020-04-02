@@ -20,28 +20,31 @@ func generateHandler() fasthttp.RequestHandler {
 func testHandlerAndParams(
 	t *testing.T, tree *Tree, requestedPath string, handler fasthttp.RequestHandler, wantTSR bool, params map[string]interface{},
 ) {
-	ctx := new(fasthttp.RequestCtx)
+	for _, ctx := range []*fasthttp.RequestCtx{new(fasthttp.RequestCtx), nil} {
 
-	h, tsr := tree.Get(requestedPath, ctx)
-	if reflect.ValueOf(handler).Pointer() != reflect.ValueOf(h).Pointer() {
-		t.Errorf("Path '%s' handler == %p, want %p", requestedPath, h, handler)
-	}
+		h, tsr := tree.Get(requestedPath, ctx)
+		if reflect.ValueOf(handler).Pointer() != reflect.ValueOf(h).Pointer() {
+			t.Errorf("Path '%s' handler == %p, want %p", requestedPath, h, handler)
+		}
 
-	if wantTSR != tsr {
-		t.Errorf("Path '%s' tsr == %v, want %v", requestedPath, tsr, wantTSR)
-	}
+		if wantTSR != tsr {
+			t.Errorf("Path '%s' tsr == %v, want %v", requestedPath, tsr, wantTSR)
+		}
 
-	resultParams := make(map[string]interface{})
-	if params == nil {
-		params = make(map[string]interface{})
-	}
+		if ctx != nil {
+			resultParams := make(map[string]interface{})
+			if params == nil {
+				params = make(map[string]interface{})
+			}
 
-	ctx.VisitUserValues(func(key []byte, value interface{}) {
-		resultParams[string(key)] = value
-	})
+			ctx.VisitUserValues(func(key []byte, value interface{}) {
+				resultParams[string(key)] = value
+			})
 
-	if !reflect.DeepEqual(resultParams, params) {
-		t.Errorf("User values == %v, want %v", resultParams, params)
+			if !reflect.DeepEqual(resultParams, params) {
+				t.Errorf("User values == %v, want %v", resultParams, params)
+			}
+		}
 	}
 }
 

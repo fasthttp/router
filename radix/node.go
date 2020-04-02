@@ -303,8 +303,10 @@ walk:
 				if tsr {
 					return nil, tsr
 				} else if h != nil {
-					for i, key := range child.paramKeys {
-						ctx.SetUserValue(key, values[i])
+					if ctx != nil {
+						for i, key := range child.paramKeys {
+							ctx.SetUserValue(key, values[i])
+						}
 					}
 
 					return h, false
