@@ -180,11 +180,6 @@ walk:
 				}
 
 				end++
-				if len(path) > start+end && path[start+end] == '/' {
-					// Include trailing slash for a better lookup
-					end++
-				}
-
 				newPath += path[questionMarkIndex+1 : start+end]
 
 				path = path[:questionMarkIndex] + path[questionMarkIndex+1:] // remove '?'
@@ -198,8 +193,9 @@ walk:
 				newPath += path[:questionMarkIndex]
 
 				// include the path without the wildcard
-				if !gotils.StringSliceInclude(paths, path[:start-1]) {
-					paths = append(paths, path[:start-1])
+				// -2 due to remove the '/' and '{'
+				if !gotils.StringSliceInclude(paths, path[:start-2]) {
+					paths = append(paths, path[:start-2])
 				}
 			}
 		}

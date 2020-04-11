@@ -148,16 +148,16 @@ func TestGetOptionalPath(t *testing.T) {
 		tsr     bool
 		handler fasthttp.RequestHandler
 	}{
-		{"/show/{name}", true, nil},
-		{"/show/{name}/", false, handler},
-		{"/show/{name}/{surname}", true, nil},
-		{"/show/{name}/{surname}/", false, handler},
-		{"/show/{name}/{surname}/at", true, nil},
-		{"/show/{name}/{surname}/at/", false, handler},
-		{"/show/{name}/{surname}/at/{address}", true, nil},
-		{"/show/{name}/{surname}/at/{address}/", false, handler},
-		{"/show/{name}/{surname}/at/{address}/{id}", true, nil},
-		{"/show/{name}/{surname}/at/{address}/{id}/", false, handler},
+		{"/show/{name}", false, handler},
+		{"/show/{name}/", true, nil},
+		{"/show/{name}/{surname}", false, handler},
+		{"/show/{name}/{surname}/", true, nil},
+		{"/show/{name}/{surname}/at", false, handler},
+		{"/show/{name}/{surname}/at/", true, nil},
+		{"/show/{name}/{surname}/at/{address}", false, handler},
+		{"/show/{name}/{surname}/at/{address}/", true, nil},
+		{"/show/{name}/{surname}/at/{address}/{id}", false, handler},
+		{"/show/{name}/{surname}/at/{address}/{id}/", true, nil},
 		{"/show/{name}/{surname}/at/{address}/{id}/{phone:.*}", false, handler},
 		{"/show/{name}/{surname}/at/{address}/{id}/{phone:.*}/", true, nil},
 	}
