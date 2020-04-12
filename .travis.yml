@@ -31,7 +31,15 @@ script:
   - GOOS=darwin go build
   - GOOS=freebsd go build
   - GOOS=windows go build
-  - GOARCH=386 go build
+  - |
+    if [[ $(uname) == Darwin ]]; then
+      # Last supported version for GOOS=386 is go1.14 in Darwin
+      if [[ $(go version | awk '{print $3}') =~ ^go1\.(9|10|11|12|13|14)$ ]]; then
+          GOARCH=386 go build
+      fi
+    else
+        GOARCH=386 go build
+    fi
 
   # run tests
   - |
