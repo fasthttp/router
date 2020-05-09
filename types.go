@@ -2,6 +2,8 @@
 // Copyright 2018-present Sergio Andres Virviescas Santana, fasthttp.
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
+
+// Package router is a trie based high performance HTTP request router.
 package router
 
 import (
