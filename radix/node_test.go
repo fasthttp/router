@@ -1,3 +1,6 @@
+// Copyright 2020-present Sergio Andres Virviescas Santana, fasthttp
+// Use of this source code is governed by a BSD-style license that can be found
+// in the LICENSE file.
 package radix
 
 import (
@@ -10,6 +13,20 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+type testRequests []struct {
+	method     string
+	path       string
+	nilHandler bool
+	route      string
+	ps         map[string]interface{}
+}
+
+type testRoute struct {
+	method   string
+	path     string
+	conflict bool
+}
+
 // Used as a workaround since we can't compare functions or their addresses
 var fakeHandlerValue string
 
@@ -19,25 +36,29 @@ func fakeHandler(val string) fasthttp.RequestHandler {
 	}
 }
 
-type testRequests []struct {
-	path       string
-	nilHandler bool
-	route      string
-	ps         map[string]interface{}
+func catchPanic(testFunc func()) (recv interface{}) {
+	defer func() {
+		recv = recover()
+	}()
+
+	testFunc()
+	return
 }
 
 func acquireRequestCtx(path string) *fasthttp.RequestCtx {
-	var requestCtx fasthttp.RequestCtx
-	var fastRequest fasthttp.Request
-	fastRequest.SetRequestURI(path)
-	requestCtx.Init(&fastRequest, nil, nil)
-	return &requestCtx
+	ctx := new(fasthttp.RequestCtx)
+	req := new(fasthttp.Request)
+
+	req.SetRequestURI(path)
+	ctx.Init(req, nil, nil)
+
+	return ctx
 }
 
 func checkRequests(t *testing.T, tree *Tree, requests testRequests) {
 	for _, request := range requests {
 		ctx := acquireRequestCtx(request.path)
-		handler, _ := tree.Get(request.path, ctx)
+		handler, _ := tree.Get(request.method, request.path, ctx)
 
 		if handler == nil {
 			if !request.nilHandler {
@@ -67,9 +88,28 @@ func checkRequests(t *testing.T, tree *Tree, requests testRequests) {
 	}
 }
 
+func testRoutes(t *testing.T, routes []testRoute) {
+	tree := New()
+
+	for _, route := range routes {
+		recv := catchPanic(func() {
+			tree.Add(route.method, route.path, fakeHandler(route.path))
+		})
+
+		if route.conflict {
+			if recv == nil {
+				t.Errorf("no panic for conflicting route '%s'", route.path)
+			}
+		} else if recv != nil {
+			t.Errorf("unexpected panic for route '%s': %v", route.path, recv)
+		}
+	}
+}
+
 func TestTreeAddAndGet(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/hi",
 		"/contact",
@@ -83,28 +123,30 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/α",
 		"/β",
 	}
+
 	for _, route := range routes {
-		tree.Add(route, fakeHandler(route))
+		tree.Add(method, route, fakeHandler(route))
 	}
 
 	checkRequests(t, tree, testRequests{
-		{"/a", false, "/a", nil},
-		{"/", true, "", nil},
-		{"/hi", false, "/hi", nil},
-		{"/contact", false, "/contact", nil},
-		{"/co", false, "/co", nil},
-		{"/con", true, "", nil},  // key mismatch
-		{"/cona", true, "", nil}, // key mismatch
-		{"/no", true, "", nil},   // no matching child
-		{"/ab", false, "/ab", nil},
-		{"/α", false, "/α", nil},
-		{"/β", false, "/β", nil},
+		{method, "/a", false, "/a", nil},
+		{method, "/", true, "", nil},
+		{method, "/hi", false, "/hi", nil},
+		{method, "/contact", false, "/contact", nil},
+		{method, "/co", false, "/co", nil},
+		{method, "/con", true, "", nil},  // key mismatch
+		{method, "/cona", true, "", nil}, // key mismatch
+		{method, "/no", true, "", nil},   // no matching child
+		{method, "/ab", false, "/ab", nil},
+		{method, "/α", false, "/α", nil},
+		{method, "/β", false, "/β", nil},
 	})
 }
 
 func TestTreeWildcard(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/",
 		"/cmd/{tool}/{sub}",
@@ -122,103 +164,77 @@ func TestTreeWildcard(t *testing.T) {
 		"/info/{user}/public",
 		"/info/{user}/project/{project}",
 	}
+
 	for _, route := range routes {
-		tree.Add(route, fakeHandler(route))
+		tree.Add(method, route, fakeHandler(route))
 	}
 
 	checkRequests(t, tree, testRequests{
-		{"/", false, "/", nil},
-		{"/cmd/test/", false, "/cmd/{tool}/", map[string]interface{}{"tool": "test"}},
-		{"/cmd/test", true, "", nil},
-		{"/cmd/test/3", false, "/cmd/{tool}/{sub}", map[string]interface{}{"tool": "test", "sub": "3"}},
-		{"/src/", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "/"}},
-		{"/src/some/file.png", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "some/file.png"}},
-		{"/search/", false, "/search/", nil},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/{query}", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
-		{"/search/someth!ng+in+ünìcodé/", true, "", nil},
-		{"/user_gopher", false, "/user_{name}", map[string]interface{}{"name": "gopher"}},
-		{"/user_gopher/about", false, "/user_{name}/about", map[string]interface{}{"name": "gopher"}},
-		{"/files/js/inc/framework.js", false, "/files/{dir}/{filepath:*}", map[string]interface{}{"dir": "js", "filepath": "inc/framework.js"}},
-		{"/info/gordon/public", false, "/info/{user}/public", map[string]interface{}{"user": "gordon"}},
-		{"/info/gordon/project/go", false, "/info/{user}/project/{project}", map[string]interface{}{"user": "gordon", "project": "go"}},
-		{"/info/gordon", true, "/info/{user}/project/{project}", nil},
+		{method, "/", false, "/", nil},
+		{method, "/cmd/test/", false, "/cmd/{tool}/", map[string]interface{}{"tool": "test"}},
+		{method, "/cmd/test", true, "", nil},
+		{method, "/cmd/test/3", false, "/cmd/{tool}/{sub}", map[string]interface{}{"tool": "test", "sub": "3"}},
+		{method, "/src/", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "/"}},
+		{method, "/src/some/file.png", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "some/file.png"}},
+		{method, "/search/", false, "/search/", nil},
+		{method, "/search/someth!ng+in+ünìcodé", false, "/search/{query}", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{method, "/search/someth!ng+in+ünìcodé/", true, "", nil},
+		{method, "/user_gopher", false, "/user_{name}", map[string]interface{}{"name": "gopher"}},
+		{method, "/user_gopher/about", false, "/user_{name}/about", map[string]interface{}{"name": "gopher"}},
+		{method, "/files/js/inc/framework.js", false, "/files/{dir}/{filepath:*}", map[string]interface{}{"dir": "js", "filepath": "inc/framework.js"}},
+		{method, "/info/gordon/public", false, "/info/{user}/public", map[string]interface{}{"user": "gordon"}},
+		{method, "/info/gordon/project/go", false, "/info/{user}/project/{project}", map[string]interface{}{"user": "gordon", "project": "go"}},
+		{method, "/info/gordon", true, "/info/{user}/project/{project}", nil},
 	})
 }
 
-func catchPanic(testFunc func()) (recv interface{}) {
-	defer func() {
-		recv = recover()
-	}()
-
-	testFunc()
-	return
-}
-
-type testRoute struct {
-	path     string
-	conflict bool
-}
-
-func testRoutes(t *testing.T, routes []testRoute) {
-	tree := New()
-
-	for _, route := range routes {
-		recv := catchPanic(func() {
-			tree.Add(route.path, nil)
-		})
-
-		if route.conflict {
-			if recv == nil {
-				t.Errorf("no panic for conflicting route '%s'", route.path)
-			}
-		} else if recv != nil {
-			t.Errorf("unexpected panic for route '%s': %v", route.path, recv)
-		}
-	}
-}
-
 func TestTreeWildcardConflict(t *testing.T) {
+	method := randomHTTPMethod()
 	routes := []testRoute{
-		{"/cmd/{tool}/{sub}", false},
-		{"/cmd/vet", false},
-		{"/src/{filepath:*}", false},
-		{"/src/", false},
-		{"/src/{filepathx:*}", true},
-		{"/src1/", false},
-		{"/src1/{filepath:*}", false},
-		{"/src2{filepath:*}", true},
-		{"/search/{query}", false},
-		{"/search/invalid", false},
-		{"/user_{name}", false},
-		{"/user_x", false},
-		{"/user_{name}", true},
-		{"/id{id}", false},
-		{"/id/{id}", false},
+		{method, "/cmd/{tool}/{sub}", false},
+		{method, "/cmd/vet", false},
+		{method, "/src/{filepath:*}", false},
+		{method, "/src/", false},
+		{method, "/src/{filepathx:*}", true},
+		{method, "/src1/", false},
+		{method, "/src1/{filepath:*}", false},
+		{method, "/src2{filepath:*}", true},
+		{method, "/search/{query}", false},
+		{method, "/search/invalid", false},
+		{method, "/user_{name}", false},
+		{method, "/user_x", false},
+		{method, "/user_{name}", true},
+		{method, "/id{id}", false},
+		{method, "/id/{id}", false},
 	}
+
 	testRoutes(t, routes)
 }
 
 func TestTreeChildConflict(t *testing.T) {
+	method := randomHTTPMethod()
 	routes := []testRoute{
-		{"/cmd/vet", false},
-		{"/cmd/{tool}/{sub}", false},
-		{"/src/AUTHORS", false},
-		{"/src/{filepath:*}", false},
-		{"/user_x", false},
-		{"/user_{name}", false},
-		{"/id/{id}", false},
-		{"/id{id}", false},
-		{"/{users}", false},
-		{"/{id}/", true},
-		{"/{filepath:*}", false},
-		{"/asd{filepath:*}", true},
+		{method, "/cmd/vet", false},
+		{method, "/cmd/{tool}/{sub}", false},
+		{method, "/src/AUTHORS", false},
+		{method, "/src/{filepath:*}", false},
+		{method, "/user_x", false},
+		{method, "/user_{name}", false},
+		{method, "/id/{id}", false},
+		{method, "/id{id}", false},
+		{method, "/{users}", false},
+		{method, "/{id}/", true},
+		{method, "/{filepath:*}", false},
+		{method, "/asd{filepath:*}", true},
 	}
+
 	testRoutes(t, routes)
 }
 
 func TestTreeDuplicatePath(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/",
 		"/doc/",
@@ -226,17 +242,20 @@ func TestTreeDuplicatePath(t *testing.T) {
 		"/search/{query}",
 		"/user_{name}",
 	}
+
 	for _, route := range routes {
+		handler := fakeHandler(route)
 		recv := catchPanic(func() {
-			tree.Add(route, fakeHandler(route))
+			tree.Add(method, route, handler)
 		})
+
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
 		}
 
 		// Add again
 		recv = catchPanic(func() {
-			tree.Add(route, nil)
+			tree.Add(method, route, handler)
 		})
 		if recv == nil {
 			t.Fatalf("no panic while inserting duplicate route '%s", route)
@@ -244,26 +263,28 @@ func TestTreeDuplicatePath(t *testing.T) {
 	}
 
 	checkRequests(t, tree, testRequests{
-		{"/", false, "/", nil},
-		{"/doc/", false, "/doc/", nil},
-		{"/src/some/file.png", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "some/file.png"}},
-		{"/search/someth!ng+in+ünìcodé", false, "/search/{query}", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
-		{"/user_gopher", false, "/user_{name}", map[string]interface{}{"name": "gopher"}},
+		{method, "/", false, "/", nil},
+		{method, "/doc/", false, "/doc/", nil},
+		{method, "/src/some/file.png", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "some/file.png"}},
+		{method, "/search/someth!ng+in+ünìcodé", false, "/search/{query}", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
+		{method, "/user_gopher", false, "/user_{name}", map[string]interface{}{"name": "gopher"}},
 	})
 }
 
 func TestEmptyWildcardName(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/user{}",
 		"/user{}/",
 		"/cmd/{}/",
 		"/src/{:*}",
 	}
+
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.Add(route, nil)
+			tree.Add(method, route, fakeHandler(route))
 		})
 		if recv == nil {
 			t.Errorf("no panic while inserting route with empty wildcard name '%s", route)
@@ -272,33 +293,32 @@ func TestEmptyWildcardName(t *testing.T) {
 }
 
 func TestTreeCatchAllConflict(t *testing.T) {
+	method := randomHTTPMethod()
 	routes := []testRoute{
-		{"/src/{filepath:*}/x", true},
-		{"/src2/", false},
-		{"/src2/{filepath:*}/x", true},
-		{"/src3/{filepath:*}", false},
-		{"/src3/{filepath:*}/x", true},
+		{method, "/src/{filepath:*}/x", true},
+		{method, "/src2/", false},
+		{method, "/src2/{filepath:*}/x", true},
+		{method, "/src3/{filepath:*}", false},
+		{method, "/src3/{filepath:*}/x", true},
 	}
+
 	testRoutes(t, routes)
 }
 
 func TestTreeCatchAllConflictRoot(t *testing.T) {
+	method := randomHTTPMethod()
 	routes := []testRoute{
-		{"/", false},
-		{"/{filepath:*}", false},
+		{method, "/", false},
+		{method, "/{filepath:*}", false},
 	}
-	testRoutes(t, routes)
-}
 
-func TestTreeCatchMaxParams(t *testing.T) {
-	tree := New()
-	var route = "/cmd/{filepath:*}"
-	tree.Add(route, fakeHandler(route))
+	testRoutes(t, routes)
 }
 
 func TestTreeDoubleWildcard(t *testing.T) {
 	const panicMsg = "the wildcards must be separated by at least 1 char"
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/{foo}{bar}",
 		"/{foo}{bar}/",
@@ -308,7 +328,7 @@ func TestTreeDoubleWildcard(t *testing.T) {
 	for _, route := range routes {
 		tree := New()
 		recv := catchPanic(func() {
-			tree.Add(route, nil)
+			tree.Add(method, route, fakeHandler(route))
 		})
 
 		if rs, ok := recv.(string); !ok || !strings.HasPrefix(rs, panicMsg) {
@@ -320,6 +340,7 @@ func TestTreeDoubleWildcard(t *testing.T) {
 func TestTreeTrailingSlashRedirect(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/hi",
 		"/b/",
@@ -348,7 +369,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 	}
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.Add(route, fakeHandler(route))
+			tree.Add(method, route, fakeHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -372,7 +393,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/doc/",
 	}
 	for _, route := range tsrRoutes {
-		handler, tsr := tree.Get(route, nil)
+		handler, tsr := tree.Get(method, route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for TSR route '%s", route)
 		} else if !tsr {
@@ -389,7 +410,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/api/world/abc",
 	}
 	for _, route := range noTsrRoutes {
-		handler, tsr := tree.Get(route, nil)
+		handler, tsr := tree.Get(method, route, nil)
 		if handler != nil {
 			t.Fatalf("non-nil handler for No-TSR route '%s", route)
 		} else if tsr {
@@ -401,14 +422,16 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 	tree := New()
 
+	method := randomHTTPMethod()
 	recv := catchPanic(func() {
-		tree.Add("/{test}", fakeHandler("/{test}"))
+		tree.Add(method, "/{test}", fakeHandler("/{test}"))
 	})
+
 	if recv != nil {
 		t.Fatalf("panic inserting test route: %v", recv)
 	}
 
-	handler, tsr := tree.Get("/", nil)
+	handler, tsr := tree.Get(method, "/", nil)
 	if handler != nil {
 		t.Fatalf("non-nil handler")
 	} else if tsr {
@@ -422,6 +445,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	longPath := "/l" + strings.Repeat("o", 128) + "ng"
 	lOngPath := "/l" + strings.Repeat("O", 128) + "ng/"
 
+	method := randomHTTPMethod()
 	routes := [...]string{
 		"/hi",
 		"/b/",
@@ -463,7 +487,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 
 	for _, route := range routes {
 		recv := catchPanic(func() {
-			tree.Add(route, fakeHandler(route))
+			tree.Add(method, route, fakeHandler(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -475,7 +499,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	// Check out == in for all registered routes
 	// With fixTrailingSlash = true
 	for _, route := range routes {
-		found := tree.FindCaseInsensitivePath(route, true, buf)
+		found := tree.FindCaseInsensitivePath(method, route, true, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if out := buf.String(); out != route {
@@ -486,7 +510,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = false
 	for _, route := range routes {
-		found := tree.FindCaseInsensitivePath(route, false, buf)
+		found := tree.FindCaseInsensitivePath(method, route, false, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if out := buf.String(); out != route {
@@ -567,7 +591,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = true
 	for _, test := range tests {
-		found := tree.FindCaseInsensitivePath(test.in, true, buf)
+		found := tree.FindCaseInsensitivePath(method, test.in, true, buf)
 		if out := buf.String(); found != test.found || (found && (out != test.out)) {
 			t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
 				test.in, string(out), found, test.out, test.found)
@@ -577,7 +601,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = false
 	for _, test := range tests {
-		found := tree.FindCaseInsensitivePath(test.in, false, buf)
+		found := tree.FindCaseInsensitivePath(method, test.in, false, buf)
 		if test.slash {
 			if found { // test needs a trailingSlash fix. It must not be found!
 				t.Errorf("Found without fixTrailingSlash: %s; got %s", test.in, buf.String())
@@ -596,27 +620,29 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 func TestTreeInvalidNodeType(t *testing.T) {
 	const panicMsg = "invalid node type"
 
+	method := randomHTTPMethod()
 	tree := New()
-	tree.Add("/", fakeHandler("/"))
-	tree.Add("/{page}", fakeHandler("/{page}"))
+
+	tree.Add(method, "/", fakeHandler("/"))
+	tree.Add(method, "/{page}", fakeHandler("/{page}"))
 
 	// set invalid node type
 	tree.root.children[0].nType = 42
 
 	// normal lookup
 	recv := catchPanic(func() {
-		tree.Get("/test", nil)
+		tree.Get(method, "/test", nil)
 	})
+
 	if rs, ok := recv.(string); !ok || rs != panicMsg {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
 	}
 
-	buf := bytebufferpool.Get()
-
 	// case-insensitive lookup
 	recv = catchPanic(func() {
-		tree.FindCaseInsensitivePath("/test", true, buf)
+		tree.FindCaseInsensitivePath(method, "/test", true, bytebufferpool.Get())
 	})
+
 	if rs, ok := recv.(string); !ok || rs != panicMsg {
 		t.Fatalf("Expected panic '"+panicMsg+"', got '%v'", recv)
 	}
@@ -681,6 +707,8 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		// in an inconsistent state when the loop recovers from the
 		// panic which threw by 'addRoute' function.
 		tree := New()
+
+		method := randomHTTPMethod()
 		routes := [...]string{
 			"/con{tact}",
 			"/who/are/{you:*}",
@@ -690,11 +718,11 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		}
 
 		for _, route := range routes {
-			tree.Add(route, fakeHandler(route))
+			tree.Add(method, route, fakeHandler(route))
 		}
 
 		err := catchPanic(func() {
-			tree.Add(conflict.route, fakeHandler(conflict.route))
+			tree.Add(method, conflict.route, fakeHandler(conflict.route))
 		})
 
 		if conflict.wantErr == (err == nil) {
@@ -704,6 +732,5 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		if err != nil && conflict.wantErrText != fmt.Sprint(err) {
 			t.Errorf("Invalid conflict error text (%v)", err)
 		}
-
 	}
 }

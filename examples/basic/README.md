@@ -4,7 +4,7 @@ These examples show you the usage of `router`. You can easily build a web applic
 
 ### Basic example
 
-This is just a quick introduction, view the [GoDoc](http://godoc.org/github.com/fasthttp/router) for details.
+This is just a quick introduction, view the [GoDoc](https://pkg.go.dev/github.com/fasthttp/router) for details.
 
 Let's start with a trivial example:
 

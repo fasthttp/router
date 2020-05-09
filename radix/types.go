@@ -1,3 +1,6 @@
+// Copyright 2020-present Sergio Andres Virviescas Santana, fasthttp
+// Use of this source code is governed by a BSD-style license that can be found
+// in the LICENSE file.
 package radix
 
 import (
@@ -8,13 +11,24 @@ import (
 
 type nodeType uint8
 
-type node struct {
-	path     string
-	handler  fasthttp.RequestHandler
-	nType    nodeType
+type nodeHandler struct {
 	tsr      bool
+	handler  fasthttp.RequestHandler
+	wildcard *nodeWildcard
+}
+
+type nodeWildcard struct {
+	path     string
+	paramKey string
+	handler  fasthttp.RequestHandler
+}
+
+type node struct {
+	nType nodeType
+
+	path     string
+	handlers map[string]*nodeHandler
 	children []*node
-	wildcard *node
 
 	paramKeys  []string
 	paramRegex *regexp.Regexp

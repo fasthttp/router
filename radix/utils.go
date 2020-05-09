@@ -1,12 +1,20 @@
+// Copyright 2020-present Sergio Andres Virviescas Santana, fasthttp
+// Use of this source code is governed by a BSD-style license that can be found
+// in the LICENSE file.
 package radix
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/valyala/bytebufferpool"
 )
+
+func panicf(s string, args ...interface{}) {
+	panic(fmt.Sprintf(s, args...))
+}
 
 func min(a, b int) int {
 	if a <= b {
@@ -51,9 +59,13 @@ func longestCommonPrefix(a, b string) int {
 }
 
 // segmentEndIndex returns the index where the segment ends from the given path
-func segmentEndIndex(path string) int {
+func segmentEndIndex(path string, includeTSR bool) int {
 	end := 0
 	for end < len(path) && path[end] != '/' {
+		end++
+	}
+
+	if includeTSR && path[end:] == "/" {
 		end++
 	}
 
@@ -107,16 +119,22 @@ func findWildPath(path string, fullPath string) *wildPath {
 						wp.pattern = "(" + pattern + ")"
 						wp.regex = regexp.MustCompile(wp.pattern)
 					}
-				} else {
+				} else if path[len(path)-1] != '/' {
 					wp.pattern = "(.*)"
 				}
 
 				if len(wp.keys[0]) == 0 {
-					panic("wildcards must be named with a non-empty name in path '" + fullPath + "'")
+					panicf("wildcards must be named with a non-empty name in path '%s'", fullPath)
 				}
 
-				segEnd := end + segmentEndIndex(path[end:])
+				segEnd := end + segmentEndIndex(path[end:], true)
 				path = path[end:segEnd]
+
+				if path == "/" {
+					// Last segment, so include the TSR
+					path = ""
+					wp.end++
+				}
 
 				if len(path) > 0 {
 					// Rebuild the wildpath with the prefix

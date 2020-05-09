@@ -42,7 +42,7 @@ great for SEO and improves the user experience.
 **Stop caring about trailing slashes:** Choose the URL style you like, the
 router automatically redirects the client if a trailing slash is missing or if
 there is one extra. Of course it only does so, if the new path has a handler.
-If you don't like it, you can [turn off this behavior](http://godoc.org/github.com/fasthttp/router#Router.RedirectTrailingSlash).
+**If** you don't like it, you can [turn off this behavior](https://pkg.go.dev/github.com/fasthttp/router#Router.RedirectTrailingSlash).
 
 **Path auto-correction:** Besides detecting the missing or additional trailing
 slash at no extra cost, the router can also fix wrong cases and remove
@@ -60,7 +60,7 @@ garbage. In fact, the only heap allocations that are made, is by building the
 slice of the key-value pairs for path parameters. If the request path contains
 no parameters, not a single heap allocation is necessary.
 
-**No more server crashes:** You can set a [Panic handler](http://godoc.org/github.com/fasthttp/router#Router.PanicHandler) to deal with panics
+**No more server crashes:** You can set a [Panic handler](https://pkg.go.dev/github.com/fasthttp/router#Router.PanicHandler) to deal with panics
 occurring during handling a HTTP request. The router then recovers and lets the
 PanicHandler log what happened and deliver a nice error page.
 
@@ -68,11 +68,11 @@ PanicHandler log what happened and deliver a nice error page.
 RESTful APIs. Moreover it has builtin native support for [OPTIONS requests](http://zacstewart.com/2012/04/14/http-options-method.html)
 and `405 Method Not Allowed` replies.
 
-Of course you can also set **custom [NotFound](http://godoc.org/github.com/fasthttp/router#Router.NotFound) and [MethodNotAllowed](http://godoc.org/github.com/fasthttp/router#Router.MethodNotAllowed) handlers** and [**serve static files**](http://godoc.org/github.com/fasthttp/router#Router.ServeFiles).
+Of course you can also set **custom [NotFound](https://pkg.go.dev/github.com/fasthttp/router#Router.NotFound) and [MethodNotAllowed](https://pkg.go.dev/github.com/fasthttp/router#Router.MethodNotAllowed) handlers** and [**serve static files**](https://pkg.go.dev/github.com/fasthttp/router#Router.ServeFiles).
 
 ## Usage
 
-This is just a quick introduction, view the [GoDoc](http://godoc.org/github.com/fasthttp/router) for details:
+This is just a quick introduction, view the [GoDoc](https://pkg.go.dev/github.com/fasthttp/router) for details:
 
 Let's start with a trivial example:
 
@@ -172,7 +172,7 @@ Priority   Path             Handle
 
 Every `*<num>` represents the memory address of a handler function (a pointer). If you follow a path trough the tree from the root to the leaf, you get the complete route path, e.g `\blog\{post}\`, where `{post}` is just a placeholder ([_parameter_](#named-parameters)) for an actual post name. Unlike hash-maps, a tree structure also allows us to use dynamic parts like the `{post}` parameter, since we actually match against the routing patterns instead of just comparing hashes. [As benchmarks show][benchmark], this works very well and efficient.
 
-Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems. Moreover the router manages a separate tree for every request method. For one thing it is more space efficient than holding a method->handle map in every single node, for another thing is also allows us to greatly reduce the routing problem before even starting the look-up in the prefix-tree.
+Since URL paths have a hierarchical structure and make use only of a limited set of characters (byte values), it is very likely that there are a lot of common prefixes. This allows us to easily reduce the routing into ever smaller problems.
 
 For even better scalability, the child nodes on each tree level are ordered by priority, where the priority is just the number of handles registered in sub nodes (children, grandchildren, and so on..). This helps in two ways:
 
@@ -199,7 +199,7 @@ Just try it out for yourself, the usage of Router is very straightforward. The p
 
 ## Where can I find Middleware _X_?
 
-This package just provides a very efficient request router with a few extra features. The router is just a [`fasthttp.RequestHandler`](https://godoc.org/github.com/valyala/fasthttp#RequestHandler), you can chain any `fasthttp.RequestHandler` compatible middleware before the router. Or you could [just write your own](https://justinas.org/writing-http-middleware-in-go/), it's very easy!
+This package just provides a very efficient request router with a few extra features. The router is just a [`fasthttp.RequestHandler`](https://pkg.go.dev/github.com/valyala/fasthttp#RequestHandler), you can chain any `fasthttp.RequestHandler` compatible middleware before the router. Or you could [just write your own](https://justinas.org/writing-http-middleware-in-go/), it's very easy!
 
 Have a look at these middleware examples:
 
@@ -208,9 +208,9 @@ Have a look at these middleware examples:
 
 ## Chaining with the NotFound handler
 
-**NOTE: It might be required to set [Router.HandleMethodNotAllowed](http://godoc.org/github.com/fasthttp/router#Router.HandleMethodNotAllowed) to `false` to avoid problems.**
+**NOTE: It might be required to set [Router.HandleMethodNotAllowed](https://pkg.go.dev/github.com/fasthttp/router#Router.HandleMethodNotAllowed) to `false` to avoid problems.**
 
-You can use another [http.Handler](http://golang.org/pkg/net/http/#Handler), for example another router, to handle requests which could not be matched by this router by using the [Router.NotFound](http://godoc.org/github.com/fasthttp/router#Router.NotFound) handler. This allows chaining.
+You can use another [fasthttp.RequestHandler](https://pkg.go.dev/github.com/valyala/fasthttp#RequestHandler), for example another router, to handle requests which could not be matched by this router by using the [Router.NotFound](https://pkg.go.dev/github.com/fasthttp/router#Router.NotFound) handler. This allows chaining.
 
 ### Static files
 

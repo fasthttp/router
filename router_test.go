@@ -1,7 +1,7 @@
 // Copyright 2013 Julien Schmidt. All rights reserved.
+// Copyright 2018-present Sergio Andres Virviescas Santana, fasthttp.
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
-
 package router
 
 import (
@@ -817,10 +817,10 @@ func TestRouterServeFilesCustom(t *testing.T) {
 
 func TestRouterList(t *testing.T) {
 	expected := map[string][]string{
-		"GET":    []string{"/bar"},
-		"PATCH":  []string{"/foo"},
-		"POST":   []string{"/v1/users/{name}/{surname?}"},
-		"DELETE": []string{"/v1/users/{id?}"},
+		"GET":    {"/bar"},
+		"PATCH":  {"/foo"},
+		"POST":   {"/v1/users/{name}/{surname?}"},
+		"DELETE": {"/v1/users/{id?}"},
 	}
 
 	r := New()

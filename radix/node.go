@@ -1,3 +1,6 @@
+// Copyright 2020-present Sergio Andres Virviescas Santana, fasthttp
+// Use of this source code is governed by a BSD-style license that can be found
+// in the LICENSE file.
 package radix
 
 import (
@@ -8,19 +11,93 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+func newNodeAndHandler(method, path string, lastSegment bool) (*node, *nodeHandler) {
+	nHandler := &nodeHandler{tsr: lastSegment && path != "/" && path[len(path)-1] == '/'}
+
+	n := &node{
+		nType:    static,
+		path:     path,
+		handlers: map[string]*nodeHandler{method: nHandler},
+	}
+
+	if !lastSegment || path == "/" {
+		return n, nHandler
+	}
+
+	nHandlerTSR := &nodeHandler{tsr: !nHandler.tsr}
+
+	if nHandler.tsr {
+		n.path = n.path[:len(n.path)-1]
+	}
+
+	n.children = append(n.children, &node{
+		nType:    static,
+		path:     "/",
+		handlers: map[string]*nodeHandler{method: nHandlerTSR},
+	})
+
+	if !nHandler.tsr {
+		return n, nHandler
+	}
+
+	return n, nHandlerTSR
+}
+
+// conflict raises a panic with some details
+func (n *nodeWildcard) conflict(path, fullPath string) {
+	prefix := fullPath[:strings.Index(fullPath, path)] + n.path
+
+	panicf(
+		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
+		path, fullPath, n.path, prefix,
+	)
+}
+
 // wildPathConflict raises a panic with some details
 func (n *node) wildPathConflict(path, fullPath string) {
-	pathSeg := path
-	if n.nType != wildcard {
-		pathSeg = strings.SplitN(pathSeg, "/", 2)[0]
-	}
+	pathSeg := strings.SplitN(path, "/", 2)[0]
 	prefix := fullPath[:strings.Index(fullPath, pathSeg)] + n.path
 
-	panic("'" + pathSeg +
-		"' in new path '" + fullPath +
-		"' conflicts with existing wildcard '" + n.path +
-		"' in existing prefix '" + prefix +
-		"'")
+	panicf(
+		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
+		pathSeg, fullPath, n.path, prefix,
+	)
+}
+
+// clone clones the current node in a new pointer
+func (n node) clone() *node {
+	cloneNode := new(node)
+	cloneNode.path = n.path
+	cloneNode.handlers = n.handlers
+	cloneNode.nType = n.nType
+
+	if len(n.children) > 0 {
+		cloneNode.children = make([]*node, len(n.children))
+
+		for i, child := range n.children {
+			cloneNode.children[i] = child.clone()
+		}
+	}
+
+	if len(n.paramKeys) > 0 {
+		cloneNode.paramKeys = make([]string, len(n.paramKeys))
+		copy(cloneNode.paramKeys, n.paramKeys)
+	}
+	cloneNode.paramRegex = n.paramRegex
+
+	return cloneNode
+}
+
+func (n *node) split(i int) {
+	cloneChild := n.clone()
+	cloneChild.nType = static
+	cloneChild.path = cloneChild.path[i:]
+	cloneChild.paramKeys = nil
+	cloneChild.paramRegex = nil
+
+	n.path = n.path[:i]
+	n.handlers = nil
+	n.children = append(n.children[:0], cloneChild)
 }
 
 func (n *node) findEndIndexAndValues(path string) (int, []string) {
@@ -48,108 +125,143 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 	return end, values
 }
 
-func (n *node) split(i int) {
-	cloneChild := n.clone()
-	cloneChild.path = cloneChild.path[i:]
-	cloneChild.nType = static
-	cloneChild.paramKeys = nil
-	cloneChild.paramRegex = nil
-
-	n.path = n.path[:i]
-	n.handler = nil
-	n.wildcard = nil
-	n.children = append(n.children[:0], cloneChild)
-}
-
-func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
-	if n.handler != nil {
-		panic("a handle is already registered for path '" + fullPath + "'")
+func (n *node) setHandler(method string, handler fasthttp.RequestHandler, fullPath string) {
+	if n.handlers == nil {
+		n.handlers = make(map[string]*nodeHandler)
 	}
 
-	n.handler = handler
+	nHandler := n.handlers[method]
+	if nHandler == nil {
+		nHandler = new(nodeHandler)
+		n.handlers[method] = nHandler
+	}
+
+	if nHandler.handler != nil || nHandler.tsr {
+		panicf("a handle is already registered for path '%s'", fullPath)
+	}
+
+	nHandler.handler = handler
+
+	// Set TSR in method
+	for i := range n.children {
+		nTSR := n.children[i]
+
+		if nTSR.path != "/" {
+			continue
+		}
+
+		if nTSR.handlers == nil {
+			nTSR.handlers = make(map[string]*nodeHandler)
+		}
+
+		nTSR.handlers[method] = &nodeHandler{tsr: true}
+	}
 }
 
-func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *node {
-	end := segmentEndIndex(path)
-	newNode := &node{path: path, nType: static}
+func (n *node) insert(method, path, fullPath string, handler fasthttp.RequestHandler) *node {
+	end := segmentEndIndex(path, true)
+	newNode, newNodeHandler := newNodeAndHandler(method, path, true)
 
 	wp := findWildPath(path, fullPath)
 	if wp != nil {
-		// Finds a valid wilcard/param
+		lastSegment := len(path) == wp.end
 
-		if wp.pType == wildcard && len(path) == end && n.path[len(n.path)-1] != '/' {
-			panic("no / before wildcard in path '" + fullPath + "'")
-		}
-
-		// Set the index to end the new node path and starts the path of the next node
 		j := end
 		if wp.start > 0 {
-			// If the wild path index it's greater than 0, sets it as the index
 			j = wp.start
+			lastSegment = false
 		}
 
-		if wp.start == 0 {
-			newNode.path = wp.path
+		newNode, newNodeHandler = newNodeAndHandler(method, path[:j], lastSegment)
+
+		if wp.start > 0 {
+			n.children = append(n.children, newNode)
+
+			if !newNodeHandler.tsr {
+				newNode.handlers = nil
+			}
+
+			return newNode.insert(method, path[j:], fullPath, handler)
+		}
+
+		switch wp.pType {
+		case param:
+			// newNode.path = newNode.path[:wp.end]
 			newNode.nType = wp.pType
 			newNode.paramKeys = wp.keys
 			newNode.paramRegex = wp.regex
-			j = wp.end
-		} else {
-			newNode.path = path[:j]
+		case wildcard:
+			if len(path) == end && n.path[len(n.path)-1] != '/' {
+				panicf("no / before wildcard in path '%s'", fullPath)
+			} else if len(path) != end {
+				panicf("wildcard routes are only allowed at the end of the path in path '%s'", fullPath)
+			}
+
+			if n.path != "/" && n.path[len(n.path)-1] == '/' {
+				n.split(len(n.path) - 1)
+				n.handlers = map[string]*nodeHandler{method: {tsr: true}}
+
+				n = n.children[0]
+			}
+
+			newNodeWildcard := &nodeWildcard{
+				path:     wp.path,
+				paramKey: wp.keys[0],
+				handler:  handler,
+			}
+
+			nHandler := n.handlers[method]
+			if nHandler != nil {
+				if nHandler.wildcard != nil {
+					nHandler.wildcard.conflict(path, fullPath)
+				}
+
+				nHandler.wildcard = newNodeWildcard
+
+			} else {
+				if n.handlers == nil {
+					n.handlers = make(map[string]*nodeHandler)
+				}
+
+				newNodeHandler.wildcard = newNodeWildcard
+				n.handlers[method] = newNodeHandler
+			}
+
+			return n
 		}
 
-		if newNode.path == "/" && n.handler == nil {
-			// The current path is '/' and it don't has a handler,
-			// so force the trailing slash redirect
-			n.tsr = true
-		}
+		path = path[wp.end:]
 
-		if newNode.nType == wildcard && len(path) != end {
-			panic("wildcard routes are only allowed at the end of the path in path '" + fullPath + "'")
-		}
-
-		if len(path[j:]) > 0 {
-			// Adds the next segment to the new node
-
+		if len(path) > 0 && len(newNode.children) == 0 {
 			n.children = append(n.children, newNode)
-			return newNode.insert(path[j:], fullPath, handler)
+
+			if !newNodeHandler.tsr {
+				newNode.handlers = nil
+			}
+
+			return newNode.insert(method, path, fullPath, handler)
 		}
 	}
 
-	newNode.handler = handler
+	newNodeHandler.handler = handler
+	n.children = append(n.children, newNode)
 
-	if newNode.nType == wildcard {
-		// If the new node is a wildcard, set it as wildcard in the current node
+	if newNode.path == "/" {
+		n.handlers = map[string]*nodeHandler{method: {tsr: true}}
+	}
 
-		if n.wildcard != nil {
-			n.wildcard.wildPathConflict(path, fullPath)
-		}
-
-		if len(n.path) > 2 && n.path[len(n.path)-1] == '/' {
-			// Splits edge if the path of the current node finish with a slash
-
-			i := len(n.path) - 1
-			n.split(i)
-
-			n.tsr = true
-			n = n.children[0]
-		}
-
-		n.wildcard = newNode
-
-	} else {
-		// Adds the new node as a child
-
-		n.children = append(n.children, newNode)
+	if len(newNode.children) == 1 {
+		// New node has a TSR, so get the child node with path "/"
+		return newNode.children[0]
 	}
 
 	return newNode
 }
 
 // add adds the handler to node for the given path
-func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node {
-	if n.path == path {
-		n.setHandler(handler, fullPath)
+func (n *node) add(method, path, fullPath string, handler fasthttp.RequestHandler) *node {
+	if n.path == path || len(path) == 0 {
+		n.setHandler(method, handler, fullPath)
 
 		return n
 	}
@@ -167,17 +279,13 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node
 			}
 
 			if len(path) > i {
-				return child.add(path[i:], fullPath, handler)
+				return child.add(method, path[i:], fullPath, handler)
 			}
 		case param:
 			wp := findWildPath(path, fullPath)
 
-			// if wp == nil {
-			// 	continue
-			// }
-
 			isParam := wp.start == 0 && wp.pType == param
-			hasHandler := child.handler != nil || handler == nil
+			hasHandler := (child.handlers != nil && child.handlers[method] != nil) || handler == nil
 
 			if len(path) == wp.end && isParam && hasHandler {
 				// The current segment is a param and it's duplicated
@@ -187,22 +295,22 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node
 
 			if len(path) > i {
 				if child.path == wp.path {
-					return child.add(path[i:], fullPath, handler)
+					return child.add(method, path[i:], fullPath, handler)
 				}
 
-				return n.insert(path, fullPath, handler)
+				return n.insert(method, path, fullPath, handler)
 			}
 		}
 
-		child.setHandler(handler, fullPath)
+		child.setHandler(method, handler, fullPath)
 
 		return child
 	}
 
-	return n.insert(path, fullPath, handler)
+	return n.insert(method, path, fullPath, handler)
 }
 
-func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+func (n *node) getFromChild(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 walk:
 	for {
 		for _, child := range n.children {
@@ -222,41 +330,30 @@ walk:
 
 					path = path[len(child.path):]
 
-					if len(path) == 1 {
-						if path == "/" && child.handler != nil {
-							if child.tsr {
-								return child.handler, false
-							}
-
-							return nil, true
-						}
-					}
-
 					n = child
 					continue walk
 
 				} else if path == child.path {
+					nHandler := child.handlers[method]
 
 					switch {
-					case child.tsr:
+					case nHandler == nil:
+						return nil, false
+					case nHandler.tsr:
 						return nil, true
-					case child.handler != nil:
-						return child.handler, false
-					case child.wildcard != nil:
+					case nHandler.handler != nil:
+						return nHandler.handler, false
+					case nHandler.wildcard != nil:
 						if ctx != nil {
-							for _, key := range child.wildcard.paramKeys {
-								ctx.SetUserValue(key, path)
-							}
+							ctx.SetUserValue(nHandler.wildcard.paramKey, path)
 						}
 
-						return child.wildcard.handler, false
+						return nHandler.wildcard.handler, false
 					}
-
-					return nil, false
 				}
 
 			case param:
-				end := segmentEndIndex(path)
+				end := segmentEndIndex(path, false)
 				values := []string{path[:end]}
 
 				if child.paramRegex != nil {
@@ -266,50 +363,35 @@ walk:
 					}
 				}
 
-				if child.handler != nil {
-					if end == len(path) {
-						if child.tsr {
-							return nil, true
-						}
-
+				if len(path) > end {
+					h, tsr := child.getFromChild(method, path[end:], ctx)
+					if tsr {
+						return nil, tsr
+					} else if h != nil {
 						if ctx != nil {
 							for i, key := range child.paramKeys {
 								ctx.SetUserValue(key, values[i])
 							}
 						}
 
-						return child.handler, false
-
-					} else if path[end:] == "/" {
-
-						if !child.tsr {
-							return nil, true
-						}
-
-						if ctx != nil {
-							for i, key := range child.paramKeys {
-								ctx.SetUserValue(key, values[i])
-							}
-						}
-
-						return child.handler, false
-
+						return h, false
 					}
-				} else if len(path[end:]) == 0 {
-					return nil, false
-				}
 
-				h, tsr := child.getFromChild(path[end:], ctx)
-				if tsr {
-					return nil, tsr
-				} else if h != nil {
-					if ctx != nil {
+				} else if len(path) == end {
+					nHandler := child.handlers[method]
+
+					switch {
+					case nHandler == nil:
+						return nil, false
+					case nHandler.tsr:
+						return nil, true
+					case ctx != nil:
 						for i, key := range child.paramKeys {
 							ctx.SetUserValue(key, values[i])
 						}
 					}
 
-					return h, false
+					return nHandler.handler, false
 				}
 
 			default:
@@ -317,49 +399,53 @@ walk:
 			}
 		}
 
-		if n.wildcard != nil {
-			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.paramKeys[0], path)
-			}
+		if n.handlers != nil {
+			nHandler := n.handlers[method]
 
-			return n.wildcard.handler, false
+			if nHandler != nil && nHandler.wildcard != nil {
+				if ctx != nil {
+					ctx.SetUserValue(nHandler.wildcard.paramKey, path)
+				}
+
+				return nHandler.wildcard.handler, false
+			}
 		}
 
 		return nil, false
 	}
 }
 
-func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
+func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	if len(path) > len(n.path) {
-		if strings.EqualFold(path[:len(n.path)], n.path) {
-
-			path = path[len(n.path):]
-			buf.WriteString(n.path)
-
-			if len(path) == 1 {
-				if path == "/" && n.handler != nil {
-					if n.tsr {
-						buf.WriteByte('/')
-
-						return true, false
-					}
-
-					return true, true
-				}
-			}
-
-			found, tsr := n.findChild(path, buf)
-			if found {
-				return found, tsr
-			}
-
-			bufferRemoveString(buf, n.path)
+		if !strings.EqualFold(path[:len(n.path)], n.path) {
+			return false, false
 		}
-	} else if strings.EqualFold(path, n.path) && n.handler != nil {
+
+		path = path[len(n.path):]
 		buf.WriteString(n.path)
 
-		if n.tsr {
-			buf.WriteByte('/')
+		found, tsr := n.findFromChild(method, path, buf)
+		if found {
+			return found, tsr
+		}
+
+		bufferRemoveString(buf, n.path)
+
+	} else if strings.EqualFold(path, n.path) {
+		nHandler := n.handlers[method]
+		if nHandler == nil {
+			return false, false
+		}
+
+		buf.WriteString(n.path)
+
+		if nHandler.tsr {
+			if n.path == "/" {
+				bufferRemoveString(buf, n.path)
+			} else {
+				buf.WriteByte('/')
+			}
+
 			return true, true
 		}
 
@@ -369,17 +455,17 @@ func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	return false, false
 }
 
-func (n *node) findChild(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
+func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	for _, child := range n.children {
 		switch child.nType {
 		case static:
-			found, tsr := child.find(path, buf)
+			found, tsr := child.find(method, path, buf)
 			if found {
 				return found, tsr
 			}
 
 		case param:
-			end := segmentEndIndex(path)
+			end := segmentEndIndex(path, false)
 
 			if child.paramRegex != nil {
 				end, _ = child.findEndIndexAndValues(path[:end])
@@ -390,34 +476,25 @@ func (n *node) findChild(path string, buf *bytebufferpool.ByteBuffer) (bool, boo
 
 			buf.WriteString(path[:end])
 
-			if child.handler != nil {
-				if end == len(path) {
-					if child.tsr {
-						buf.WriteByte('/')
+			if len(path) > end {
+				found, tsr := child.findFromChild(method, path[end:], buf)
+				if found {
+					return found, tsr
+				}
 
-						return true, true
-					}
+			} else if len(path) == end {
+				nHandler := child.handlers[method]
+				if nHandler == nil {
+					return false, false
+				}
 
-					return true, false
-
-				} else if path[end:] == "/" {
-					if child.tsr {
-						buf.WriteByte('/')
-
-						return true, false
-					}
+				if nHandler.tsr {
+					buf.WriteByte('/')
 
 					return true, true
 				}
-			} else if len(path[end:]) == 0 {
-				bufferRemoveString(buf, path[:end])
 
-				return false, false
-			}
-
-			found, tsr := child.findChild(path[end:], buf)
-			if found {
-				return found, tsr
+				return true, false
 			}
 
 			bufferRemoveString(buf, path[:end])
@@ -427,45 +504,17 @@ func (n *node) findChild(path string, buf *bytebufferpool.ByteBuffer) (bool, boo
 		}
 	}
 
-	if n.wildcard != nil {
-		buf.WriteString(path)
+	if n.handlers != nil {
+		nHandler := n.handlers[method]
 
-		return true, false
+		if nHandler != nil && nHandler.wildcard != nil {
+			buf.WriteString(path)
+
+			return true, false
+		}
 	}
 
 	return false, false
-}
-
-// clone clones the current node in a new pointer
-func (n node) clone() *node {
-	cloneNode := new(node)
-	cloneNode.path = n.path
-	cloneNode.handler = n.handler
-	cloneNode.nType = n.nType
-	cloneNode.tsr = n.tsr
-
-	if n.wildcard != nil {
-		cloneNode.wildcard = n.wildcard.clone()
-	}
-
-	if len(n.children) > 0 {
-		cloneNode.children = make([]*node, len(n.children))
-
-		for i, child := range n.children {
-			cloneNode.children[i] = child.clone()
-		}
-	}
-
-	if len(n.paramKeys) > 0 {
-		cloneNode.paramKeys = make([]string, len(n.paramKeys))
-
-		for i, key := range n.paramKeys {
-			cloneNode.paramKeys[i] = key
-		}
-	}
-	cloneNode.paramRegex = n.paramRegex
-
-	return cloneNode
 }
 
 // sort sorts the current node and their children

@@ -1,3 +1,6 @@
+// Copyright 2020-present Sergio Andres Virviescas Santana, fasthttp
+// Use of this source code is governed by a BSD-style license that can be found
+// in the LICENSE file.
 package radix
 
 import (
@@ -18,38 +21,25 @@ func New() *Tree {
 // Add adds a node with the given handle to the path.
 //
 // WARNING: Not concurrency-safe!
-func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
+func (t *Tree) Add(method, path string, handler fasthttp.RequestHandler) {
 	if !strings.HasPrefix(path, "/") {
-		panic("path must begin with '/' in path '" + path + "'")
+		panicf("path must begin with '/' in path '%s'", path)
+	} else if handler == nil {
+		panic("nil handler")
 	}
 
 	fullPath := path
 
 	i := longestCommonPrefix(path, t.root.path)
-	if i > 0 && len(t.root.path) > i {
-		t.root.split(i)
+	if i > 0 {
+		if len(t.root.path) > i {
+			t.root.split(i)
+		}
+
+		path = path[i:]
 	}
 
-	tsr := false
-	if path != "/" {
-		if strings.HasPrefix(path, t.root.path) {
-			path = path[len(t.root.path):]
-		}
-
-		if strings.HasSuffix(path, "/") {
-			tsr = true
-			path = path[:len(path)-1]
-		}
-
-		if len(path) == 0 {
-			t.root.setHandler(handler, fullPath)
-
-			return
-		}
-	}
-
-	n := t.root.add(path, fullPath, handler)
-	n.tsr = tsr
+	t.root.add(method, path, fullPath, handler)
 
 	if len(t.root.path) == 0 {
 		t.root = t.root.children[0]
@@ -65,7 +55,7 @@ func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
 // If no handle can be found, a TSR (trailing slash redirect) recommendation is
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
-func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+func (t *Tree) Get(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 	n := t.root
 
 	if len(path) > len(n.path) {
@@ -75,31 +65,24 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 
 		path = path[len(n.path):]
 
-		if len(path) == 1 {
-			if path == "/" && n.handler != nil {
-				if n.tsr {
-					return n.handler, false
-				}
-
-				return nil, true
-			}
-		}
-
-		return n.getFromChild(path, ctx)
+		return n.getFromChild(method, path, ctx)
 
 	} else if path == n.path {
+		nHandler := n.handlers[method]
 
 		switch {
-		case n.tsr:
+		case nHandler == nil:
+			return nil, false
+		case nHandler.tsr:
 			return nil, true
-		case n.handler != nil:
-			return n.handler, false
-		case n.wildcard != nil:
+		case nHandler.handler != nil:
+			return nHandler.handler, false
+		case nHandler.wildcard != nil:
 			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.paramKeys[0], "/")
+				ctx.SetUserValue(nHandler.wildcard.paramKey, "/")
 			}
 
-			return n.wildcard.handler, false
+			return nHandler.wildcard.handler, false
 		}
 
 	}
@@ -112,8 +95,8 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 // It can optionally also fix trailing slashes.
 // It returns the case-corrected path and a bool indicating whether the lookup
 // was successful.
-func (t *Tree) FindCaseInsensitivePath(path string, fixTrailingSlash bool, buf *bytebufferpool.ByteBuffer) bool {
-	found, tsr := t.root.find(path, buf)
+func (t *Tree) FindCaseInsensitivePath(method, path string, fixTrailingSlash bool, buf *bytebufferpool.ByteBuffer) bool {
+	found, tsr := t.root.find(method, path, buf)
 
 	if !found || (tsr && !fixTrailingSlash) {
 		buf.Reset()
