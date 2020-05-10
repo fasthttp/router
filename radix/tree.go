@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-// Package radix is a high performance HTTP routes store.
+// Package radix is a high performance HTTP routes storage.
 package radix
 
 import (
@@ -12,6 +12,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// New returns an empty routes storage
 func New() *Tree {
 	return &Tree{
 		root: &node{

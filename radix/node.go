@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-// Package radix is a high performance HTTP routes store.
+// Package radix is a high performance HTTP routes storage.
 package radix
 
 import (
@@ -69,9 +69,9 @@ func (n *node) wildPathConflict(path, fullPath string) {
 // clone clones the current node in a new pointer
 func (n node) clone() *node {
 	cloneNode := new(node)
+	cloneNode.nType = n.nType
 	cloneNode.path = n.path
 	cloneNode.handlers = n.handlers
-	cloneNode.nType = n.nType
 
 	if len(n.children) > 0 {
 		cloneNode.children = make([]*node, len(n.children))
@@ -249,6 +249,7 @@ func (n *node) insert(method, path, fullPath string, handler fasthttp.RequestHan
 	n.children = append(n.children, newNode)
 
 	if newNode.path == "/" {
+		// Add TSR when split a edge and the remain path to insert is "/"
 		n.handlers = map[string]*nodeHandler{method: {tsr: true}}
 	}
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-// Package radix is a high performance HTTP routes store.
+// Package radix is a high performance HTTP routes storage.
 package radix
 
 import (
@@ -36,10 +36,6 @@ type node struct {
 	paramRegex *regexp.Regexp
 }
 
-type Tree struct {
-	root *node
-}
-
 type wildPath struct {
 	path  string
 	keys  []string
@@ -49,4 +45,9 @@ type wildPath struct {
 
 	pattern string
 	regex   *regexp.Regexp
+}
+
+// Tree is a routes storage
+type Tree struct {
+	root *node
 }
