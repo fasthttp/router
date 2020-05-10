@@ -193,7 +193,7 @@ For even better scalability, the child nodes on each tree level are ordered by p
 
 Because fasthttp doesn't provide http.Handler. See this [description](https://github.com/valyala/fasthttp#switching-from-nethttp-to-fasthttp).
 
-Fasthttp works with [RequestHandler](https://godoc.org/github.com/valyala/fasthttp#RequestHandler) functions instead of objects implementing Handler interface. So a Router provides a [Handler](https://godoc.org/github.com/fasthttp/router#Router.Handler) interface to implement the fasthttp.ListenAndServe interface.
+Fasthttp works with [RequestHandler](https://pkg.go.dev/github.com/valyala/fasthttp#RequestHandler) functions instead of objects implementing Handler interface. So a Router provides a [Handler](https://pkg.go.dev/github.com/fasthttp/router#Router.Handler) interface to implement the fasthttp.ListenAndServe interface.
 
 Just try it out for yourself, the usage of Router is very straightforward. The package is compact and minimalistic, but also probably one of the easiest routers to set up.
 
