@@ -59,35 +59,36 @@ func (t *Tree) Add(method, path string, handler fasthttp.RequestHandler) {
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
 func (t *Tree) Get(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
-	n := t.root
-
-	if len(path) > len(n.path) {
-		if path[:len(n.path)] != n.path {
+	if len(path) > len(t.root.path) {
+		if path[:len(t.root.path)] != t.root.path {
 			return nil, false
 		}
 
-		path = path[len(n.path):]
+		path = path[len(t.root.path):]
 
-		return n.getFromChild(method, path, ctx)
+		return t.root.getFromChild(method, path, ctx)
 
-	} else if path == n.path {
-		nHandler := n.handlers[method]
+	} else if path == t.root.path {
+		methods := []string{method, MethodWild}
 
-		switch {
-		case nHandler == nil:
-			return nil, false
-		case nHandler.tsr:
-			return nil, true
-		case nHandler.handler != nil:
-			return nHandler.handler, false
-		case nHandler.wildcard != nil:
-			if ctx != nil {
-				ctx.SetUserValue(nHandler.wildcard.paramKey, "/")
+		for i := range methods {
+			nHandler := t.root.handlers[methods[i]]
+
+			switch {
+			case nHandler == nil:
+				continue
+			case nHandler.tsr:
+				return nil, true
+			case nHandler.handler != nil:
+				return nHandler.handler, false
+			case nHandler.wildcard != nil:
+				if ctx != nil {
+					ctx.SetUserValue(nHandler.wildcard.paramKey, "/")
+				}
+
+				return nHandler.wildcard.handler, false
 			}
-
-			return nHandler.wildcard.handler, false
 		}
-
 	}
 
 	return nil, false

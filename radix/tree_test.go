@@ -26,6 +26,7 @@ var httpMethods = []string{
 	fasthttp.MethodConnect,
 	fasthttp.MethodOptions,
 	fasthttp.MethodTrace,
+	MethodWild,
 }
 
 func randomHTTPMethod() string {
@@ -208,19 +209,29 @@ func Test_Get(t *testing.T) {
 		tree.Add(method, "/api", handler)
 		tree.Add(method, "/api/users", handler)
 
-		testHandlerAndParams(t, tree, method, "/api/", nil, true, nil)
+		reqMethod := method
+		for reqMethod == MethodWild {
+			reqMethod = randomHTTPMethod()
+		}
 
-		testHandlerAndParams(t, tree, method, "/a", nil, false, nil)
-		testHandlerAndParams(t, tree, method, "/api/user", nil, false, nil)
+		testHandlerAndParams(t, tree, reqMethod, "/api/", nil, true, nil)
+
+		testHandlerAndParams(t, tree, reqMethod, "/a", nil, false, nil)
+		testHandlerAndParams(t, tree, reqMethod, "/api/user", nil, false, nil)
 	}
 
 	for _, method := range httpMethods {
 		tree := New()
 		tree.Add(method, "/api/", handler)
 
-		testHandlerAndParams(t, tree, method, "/api", nil, true, nil)
-		testHandlerAndParams(t, tree, method, "/api/", handler, false, nil)
-		testHandlerAndParams(t, tree, method, "/data", nil, false, nil)
+		reqMethod := method
+		for reqMethod == MethodWild {
+			reqMethod = randomHTTPMethod()
+		}
+
+		testHandlerAndParams(t, tree, reqMethod, "/api", nil, true, nil)
+		testHandlerAndParams(t, tree, reqMethod, "/api/", handler, false, nil)
+		testHandlerAndParams(t, tree, reqMethod, "/data", nil, false, nil)
 	}
 }
 

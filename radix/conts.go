@@ -13,3 +13,6 @@ const (
 	param
 	wildcard
 )
+
+// MethodWild wild HTTP method
+const MethodWild = "*"

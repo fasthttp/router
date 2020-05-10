@@ -16,6 +16,9 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// MethodWild wild HTTP method
+const MethodWild = radix.MethodWild
+
 var (
 	defaultContentType = []byte("text/plain; charset=utf-8")
 	questionMark       = byte('?')
@@ -89,6 +92,13 @@ func (r *Router) PATCH(path string, handler fasthttp.RequestHandler) {
 // DELETE is a shortcut for router.Handle(fasthttp.MethodDelete, path, handler)
 func (r *Router) DELETE(path string, handler fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodDelete, path, handler)
+}
+
+// ANY is a shortcut for router.Handle(router.MethodWild, path, handler)
+//
+// WARNING: Use only for routes where the request method is not important
+func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
+	r.Handle(MethodWild, path, handler)
 }
 
 // Handle registers a new request handler with the given path and method.

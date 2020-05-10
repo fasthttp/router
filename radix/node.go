@@ -47,7 +47,7 @@ func newNodeAndHandler(method, path string, lastSegment bool) (*node, *nodeHandl
 
 // conflict raises a panic with some details
 func (n *nodeWildcard) conflict(path, fullPath string) {
-	prefix := fullPath[:strings.Index(fullPath, path)] + n.path
+	prefix := fullPath[:strings.LastIndex(fullPath, path)] + n.path
 
 	panicf(
 		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
@@ -58,7 +58,7 @@ func (n *nodeWildcard) conflict(path, fullPath string) {
 // wildPathConflict raises a panic with some details
 func (n *node) wildPathConflict(path, fullPath string) {
 	pathSeg := strings.SplitN(path, "/", 2)[0]
-	prefix := fullPath[:strings.Index(fullPath, pathSeg)] + n.path
+	prefix := fullPath[:strings.LastIndex(fullPath, path)] + n.path
 
 	panicf(
 		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
@@ -337,21 +337,25 @@ walk:
 					continue walk
 
 				} else if path == child.path {
-					nHandler := child.handlers[method]
+					methods := []string{method, MethodWild}
 
-					switch {
-					case nHandler == nil:
-						return nil, false
-					case nHandler.tsr:
-						return nil, true
-					case nHandler.handler != nil:
-						return nHandler.handler, false
-					case nHandler.wildcard != nil:
-						if ctx != nil {
-							ctx.SetUserValue(nHandler.wildcard.paramKey, path)
+					for i := range methods {
+						nHandler := child.handlers[methods[i]]
+
+						switch {
+						case nHandler == nil:
+							continue
+						case nHandler.tsr:
+							return nil, true
+						case nHandler.handler != nil:
+							return nHandler.handler, false
+						case nHandler.wildcard != nil:
+							if ctx != nil {
+								ctx.SetUserValue(nHandler.wildcard.paramKey, path)
+							}
+
+							return nHandler.wildcard.handler, false
 						}
-
-						return nHandler.wildcard.handler, false
 					}
 				}
 
@@ -381,20 +385,24 @@ walk:
 					}
 
 				} else if len(path) == end {
-					nHandler := child.handlers[method]
+					methods := []string{method, MethodWild}
 
-					switch {
-					case nHandler == nil:
-						return nil, false
-					case nHandler.tsr:
-						return nil, true
-					case ctx != nil:
-						for i, key := range child.paramKeys {
-							ctx.SetUserValue(key, values[i])
+					for i := range methods {
+						nHandler := child.handlers[methods[i]]
+
+						switch {
+						case nHandler == nil:
+							continue
+						case nHandler.tsr:
+							return nil, true
+						case ctx != nil:
+							for i, key := range child.paramKeys {
+								ctx.SetUserValue(key, values[i])
+							}
 						}
-					}
 
-					return nHandler.handler, false
+						return nHandler.handler, false
+					}
 				}
 
 			default:
@@ -403,10 +411,15 @@ walk:
 		}
 
 		if n.handlers != nil {
-			nHandler := n.handlers[method]
+			methods := []string{method, MethodWild}
 
-			if nHandler != nil && nHandler.wildcard != nil {
-				if ctx != nil {
+			for i := range methods {
+				nHandler := n.handlers[methods[i]]
+
+				switch {
+				case nHandler == nil, nHandler.wildcard == nil:
+					continue
+				case ctx != nil:
 					ctx.SetUserValue(nHandler.wildcard.paramKey, path)
 				}
 
@@ -435,24 +448,28 @@ func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, 
 		bufferRemoveString(buf, n.path)
 
 	} else if strings.EqualFold(path, n.path) {
-		nHandler := n.handlers[method]
-		if nHandler == nil {
-			return false, false
-		}
+		methods := []string{method, MethodWild}
 
-		buf.WriteString(n.path)
-
-		if nHandler.tsr {
-			if n.path == "/" {
-				bufferRemoveString(buf, n.path)
-			} else {
-				buf.WriteByte('/')
+		for i := range methods {
+			nHandler := n.handlers[methods[i]]
+			if nHandler == nil {
+				continue
 			}
 
-			return true, true
-		}
+			buf.WriteString(n.path)
 
-		return true, false
+			if nHandler.tsr {
+				if n.path == "/" {
+					bufferRemoveString(buf, n.path)
+				} else {
+					buf.WriteByte('/')
+				}
+
+				return true, true
+			}
+
+			return true, false
+		}
 	}
 
 	return false, false
@@ -486,18 +503,22 @@ func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer
 				}
 
 			} else if len(path) == end {
-				nHandler := child.handlers[method]
-				if nHandler == nil {
-					return false, false
+				methods := []string{method, MethodWild}
+
+				for i := range methods {
+					nHandler := child.handlers[methods[i]]
+					if nHandler == nil {
+						continue
+					}
+
+					if nHandler.tsr {
+						buf.WriteByte('/')
+
+						return true, true
+					}
+
+					return true, false
 				}
-
-				if nHandler.tsr {
-					buf.WriteByte('/')
-
-					return true, true
-				}
-
-				return true, false
 			}
 
 			bufferRemoveString(buf, path[:end])
@@ -508,12 +529,16 @@ func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer
 	}
 
 	if n.handlers != nil {
-		nHandler := n.handlers[method]
+		methods := []string{method, MethodWild}
 
-		if nHandler != nil && nHandler.wildcard != nil {
-			buf.WriteString(path)
+		for i := range methods {
+			nHandler := n.handlers[methods[i]]
 
-			return true, false
+			if nHandler != nil && nHandler.wildcard != nil {
+				buf.WriteString(path)
+
+				return true, false
+			}
 		}
 	}
 

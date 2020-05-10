@@ -27,6 +27,19 @@ type readWriter struct {
 	w bytes.Buffer
 }
 
+var httpMethods = []string{
+	fasthttp.MethodGet,
+	fasthttp.MethodHead,
+	fasthttp.MethodPost,
+	fasthttp.MethodPut,
+	fasthttp.MethodPatch,
+	fasthttp.MethodDelete,
+	fasthttp.MethodConnect,
+	fasthttp.MethodOptions,
+	fasthttp.MethodTrace,
+	MethodWild,
+}
+
 var zeroTCPAddr = &net.TCPAddr{
 	IP: net.IPv4zero,
 }
@@ -124,7 +137,7 @@ func TestRouter(t *testing.T) {
 }
 
 func TestRouterAPI(t *testing.T) {
-	var handled, get, head, options, post, put, patch, delete bool
+	var handled, get, head, options, post, put, patch, delete, any bool
 
 	httpHandler := func(ctx *fasthttp.RequestCtx) {
 		handled = true
@@ -151,6 +164,9 @@ func TestRouterAPI(t *testing.T) {
 	})
 	router.DELETE("/DELETE", func(ctx *fasthttp.RequestCtx) {
 		delete = true
+	})
+	router.ANY("/ANY", func(ctx *fasthttp.RequestCtx) {
+		any = true
 	})
 	router.Handle(fasthttp.MethodGet, "/Handler", httpHandler)
 
@@ -200,6 +216,15 @@ func TestRouterAPI(t *testing.T) {
 	request(fasthttp.MethodGet, "/Handler")
 	if !handled {
 		t.Error("routing Handler failed")
+	}
+
+	for _, method := range httpMethods {
+		request(method, "/ANY")
+		if !any {
+			t.Error("routing ANY failed")
+		}
+
+		any = false
 	}
 }
 
@@ -868,6 +893,19 @@ func BenchmarkRouterGet(b *testing.B) {
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/")
+
+	for i := 0; i < b.N; i++ {
+		r.Handler(ctx)
+	}
+}
+
+func BenchmarkRouterANY(b *testing.B) {
+	r := New()
+	r.ANY("/", func(ctx *fasthttp.RequestCtx) {})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("UNKNOWN")
 	ctx.Request.SetRequestURI("/")
 
 	for i := 0; i < b.N; i++ {

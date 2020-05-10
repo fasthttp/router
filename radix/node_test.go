@@ -715,6 +715,7 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 			"/con{tact}",
 			"/who/are/{you:*}",
 			"/who/foo/hello",
+			"/whose/{users}/{name}",
 			"/{filepath:*}",
 			"/{id}",
 		}
