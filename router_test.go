@@ -863,12 +863,8 @@ func BenchmarkAllowed(b *testing.B) {
 }
 
 func BenchmarkRouterGet(b *testing.B) {
-	resp := []byte("Bench GET")
-
 	r := New()
-	r.GET("/", func(ctx *fasthttp.RequestCtx) {
-		ctx.Success("text/plain", resp)
-	})
+	r.GET("/", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
@@ -880,12 +876,8 @@ func BenchmarkRouterGet(b *testing.B) {
 }
 
 func BenchmarkRouterNotFound(b *testing.B) {
-	resp := []byte("Bench Not Found")
-
 	r := New()
-	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {
-		ctx.Success("text/plain", resp)
-	})
+	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
@@ -897,12 +889,8 @@ func BenchmarkRouterNotFound(b *testing.B) {
 }
 
 func BenchmarkRouterCleanPath(b *testing.B) {
-	resp := []byte("Bench GET")
-
 	r := New()
-	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {
-		ctx.Success("text/plain", resp)
-	})
+	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
@@ -914,12 +902,8 @@ func BenchmarkRouterCleanPath(b *testing.B) {
 }
 
 func BenchmarkRouterRedirectTrailingSlash(b *testing.B) {
-	resp := []byte("Bench GET")
-
 	r := New()
-	r.GET("/bench/", func(ctx *fasthttp.RequestCtx) {
-		ctx.Success("text/plain", resp)
-	})
+	r.GET("/bench/", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
