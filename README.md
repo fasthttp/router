@@ -10,11 +10,7 @@ Router is a lightweight high performance HTTP request router (also called _multi
 
 This router is optimized for high performance and a small memory footprint. It scales well even with very long paths and a large number of routes. A compressing dynamic trie (radix tree) structure is used for efficient matching.
 
-#### License Related
-
-- This repo is based on [httprouter](https://github.com/julienschmidt/httprouter).
-- The author of `httprouter` [@julienschmidt](https://github.com/julienschmidt) did almost all the hard work of this router.
-- We (fasthttp ecosystem team) respect the laws of open source. So LICENSE of `httprouter` is alway stay here: [HttpRouterLicense](HttpRouterLicense).
+Based on [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter).
 
 ## Features
 

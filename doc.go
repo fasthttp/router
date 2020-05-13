@@ -1,8 +1,5 @@
 /*
-Copyright 2013 Julien Schmidt. All rights reserved.
-Copyright 2018-present Sergio Andres Virviescas Santana, fasthttp.
-Use of this source code is governed by a BSD-style license that can be found
-in the LICENSE file.
+Package router is a trie based high performance HTTP request router.
 
 A trivial example is:
 
@@ -70,6 +67,4 @@ parameter.
 To retrieve the value of a parameter,gets by the name of the parameter
  user := ctx.UserValue("user") // defined by {user} or {user:*}
 */
-
-// Package router is a trie based high performance HTTP request router.
 package router
