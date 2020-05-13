@@ -145,10 +145,9 @@ func TestTreeAddAndGet(t *testing.T) {
 	})
 }
 
-func TestTreeWildcard(t *testing.T) {
+func testTreeWildcardByMethod(t *testing.T, method string) {
 	tree := New()
 
-	method := randomHTTPMethod()
 	routes := [...]string{
 		"/",
 		"/cmd/{tool}/{sub}",
@@ -171,6 +170,10 @@ func TestTreeWildcard(t *testing.T) {
 		tree.Add(method, route, fakeHandler(route))
 	}
 
+	if method == MethodWild {
+		method = randomHTTPMethod()
+	}
+
 	checkRequests(t, tree, testRequests{
 		{method, "/", false, "/", nil},
 		{method, "/cmd/test/", false, "/cmd/{tool}/", map[string]interface{}{"tool": "test"}},
@@ -188,6 +191,12 @@ func TestTreeWildcard(t *testing.T) {
 		{method, "/info/gordon/project/go", false, "/info/{user}/project/{project}", map[string]interface{}{"user": "gordon", "project": "go"}},
 		{method, "/info/gordon", true, "/info/{user}/project/{project}", nil},
 	})
+}
+
+func TestTreeWildcard(t *testing.T) {
+	for _, method := range httpMethods {
+		testTreeWildcardByMethod(t, method)
+	}
 }
 
 func TestTreeWildcardConflict(t *testing.T) {
@@ -442,12 +451,17 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 }
 
 func TestTreeFindCaseInsensitivePath(t *testing.T) {
+	for _, method := range httpMethods {
+		testTreeFindCaseInsensitivePathByMethod(t, method)
+	}
+}
+
+func testTreeFindCaseInsensitivePathByMethod(t *testing.T, method string) {
 	tree := New()
 
 	longPath := "/l" + strings.Repeat("o", 128) + "ng"
 	lOngPath := "/l" + strings.Repeat("O", 128) + "ng/"
 
-	method := randomHTTPMethod()
 	routes := [...]string{
 		"/hi",
 		"/b/",
@@ -487,6 +501,11 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 		longPath,
 	}
 
+	reqMethod := method
+	if reqMethod == MethodWild {
+		reqMethod = randomHTTPMethod()
+	}
+
 	for _, route := range routes {
 		recv := catchPanic(func() {
 			tree.Add(method, route, fakeHandler(route))
@@ -501,7 +520,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	// Check out == in for all registered routes
 	// With fixTrailingSlash = true
 	for _, route := range routes {
-		found := tree.FindCaseInsensitivePath(method, route, true, buf)
+		found := tree.FindCaseInsensitivePath(reqMethod, route, true, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if out := buf.String(); out != route {
@@ -512,7 +531,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = false
 	for _, route := range routes {
-		found := tree.FindCaseInsensitivePath(method, route, false, buf)
+		found := tree.FindCaseInsensitivePath(reqMethod, route, false, buf)
 		if !found {
 			t.Errorf("Route '%s' not found!", route)
 		} else if out := buf.String(); out != route {
@@ -593,7 +612,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = true
 	for _, test := range tests {
-		found := tree.FindCaseInsensitivePath(method, test.in, true, buf)
+		found := tree.FindCaseInsensitivePath(reqMethod, test.in, true, buf)
 		if out := buf.String(); found != test.found || (found && (out != test.out)) {
 			t.Errorf("Wrong result for '%s': got %s, %t; want %s, %t",
 				test.in, string(out), found, test.out, test.found)
@@ -603,7 +622,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	}
 	// With fixTrailingSlash = false
 	for _, test := range tests {
-		found := tree.FindCaseInsensitivePath(method, test.in, false, buf)
+		found := tree.FindCaseInsensitivePath(reqMethod, test.in, false, buf)
 		if test.slash {
 			if found { // test needs a trailingSlash fix. It must not be found!
 				t.Errorf("Found without fixTrailingSlash: %s; got %s", test.in, buf.String())

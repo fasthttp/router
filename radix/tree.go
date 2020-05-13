@@ -69,26 +69,24 @@ func (t *Tree) Get(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.Requ
 		return t.root.getFromChild(method, path, ctx)
 
 	} else if path == t.root.path {
-		methods := []string{method, MethodWild}
+		nHandler := t.root.handlers[method]
 
-		for i := range methods {
-			nHandler := t.root.handlers[methods[i]]
-
-			switch {
-			case nHandler == nil:
-				continue
-			case nHandler.tsr:
-				return nil, true
-			case nHandler.handler != nil:
-				return nHandler.handler, false
-			case nHandler.wildcard != nil:
-				if ctx != nil {
-					ctx.SetUserValue(nHandler.wildcard.paramKey, "/")
-				}
-
-				return nHandler.wildcard.handler, false
+		switch {
+		case nHandler == nil:
+		case nHandler.tsr:
+			return nil, true
+		case nHandler.handler != nil:
+			return nHandler.handler, false
+		case nHandler.wildcard != nil:
+			if ctx != nil {
+				ctx.SetUserValue(nHandler.wildcard.paramKey, "/")
 			}
+
+			return nHandler.wildcard.handler, false
 		}
+
+		return t.root.getFromMethodWild(ctx, "/")
+
 	}
 
 	return nil, false

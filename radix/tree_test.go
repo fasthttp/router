@@ -30,7 +30,13 @@ var httpMethods = []string{
 }
 
 func randomHTTPMethod() string {
-	return httpMethods[rand.Intn(len(httpMethods)-1)]
+	method := httpMethods[rand.Intn(len(httpMethods)-1)]
+
+	for method == MethodWild {
+		method = httpMethods[rand.Intn(len(httpMethods)-1)]
+	}
+
+	return method
 }
 
 func generateHandler() fasthttp.RequestHandler {
@@ -302,22 +308,25 @@ func Test_TreeNilHandler(t *testing.T) {
 }
 
 func Benchmark_Get(b *testing.B) {
+	handler := func(ctx *fasthttp.RequestCtx) {}
+
 	tree := New()
-	method := "GET"
+	method := randomHTTPMethod()
 
 	// for i := 0; i < 3000; i++ {
 	// 	tree.Add(
-	// 		method, fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 15))), generateHandler(),
+	// 		method, fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 15))), handler,
 	// 	)
 	// }
 
-	tree.Add(method, "/plaintext", generateHandler())
-	tree.Add(method, "/json", generateHandler())
-	tree.Add(method, "/fortune", generateHandler())
-	tree.Add(method, "/fortune-quick", generateHandler())
-	tree.Add(method, "/db", generateHandler())
-	tree.Add(method, "/queries", generateHandler())
-	tree.Add(method, "/update", generateHandler())
+	tree.Add(method, "/", handler)
+	tree.Add(method, "/plaintext", handler)
+	tree.Add(method, "/json", handler)
+	tree.Add(method, "/fortune", handler)
+	tree.Add(method, "/fortune-quick", handler)
+	tree.Add(method, "/db", handler)
+	tree.Add(method, "/queries", handler)
+	tree.Add(method, "/update", handler)
 
 	ctx := new(fasthttp.RequestCtx)
 
@@ -329,12 +338,13 @@ func Benchmark_Get(b *testing.B) {
 }
 
 func Benchmark_GetWithRegex(b *testing.B) {
+	handler := func(ctx *fasthttp.RequestCtx) {}
 	method := randomHTTPMethod()
 
 	tree := New()
 	ctx := new(fasthttp.RequestCtx)
 
-	tree.Add(method, "/api/{version:v[0-9]}/data", generateHandler())
+	tree.Add(method, "/api/{version:v[0-9]}/data", handler)
 
 	b.ResetTimer()
 
@@ -344,12 +354,13 @@ func Benchmark_GetWithRegex(b *testing.B) {
 }
 
 func Benchmark_GetWithParams(b *testing.B) {
+	handler := func(ctx *fasthttp.RequestCtx) {}
 	method := randomHTTPMethod()
 
 	tree := New()
 	ctx := new(fasthttp.RequestCtx)
 
-	tree.Add(method, "/api/{version}/data", generateHandler())
+	tree.Add(method, "/api/{version}/data", handler)
 
 	b.ResetTimer()
 
@@ -359,12 +370,13 @@ func Benchmark_GetWithParams(b *testing.B) {
 }
 
 func Benchmark_FindCaseInsensitivePath(b *testing.B) {
+	handler := func(ctx *fasthttp.RequestCtx) {}
 	method := randomHTTPMethod()
 
 	tree := New()
 	buf := bytebufferpool.Get()
 
-	tree.Add(method, "/endpoint", generateHandler())
+	tree.Add(method, "/endpoint", handler)
 
 	b.ResetTimer()
 
@@ -373,25 +385,3 @@ func Benchmark_FindCaseInsensitivePath(b *testing.B) {
 		buf.Reset()
 	}
 }
-
-// func Test_foo(t *testing.T) {
-// 	tree := New()
-// 	tree.Add("GET", "/data", generateHandler())
-// 	tree.Add("GET", "/data/pacp", generateHandler())
-// 	tree.Add("GET", "/data/eeee", generateHandler())
-// 	// tree.Add("GET", "/data", generateHandler())
-// 	tree.Add("GET", "/data/pepe", generateHandler())
-// 	tree.Add("GET", "/da/juan", generateHandler())
-// 	tree.Add("GET", "/", generateHandler())
-// 	tree.Add("GET", "/{filepath:*}", generateHandler())
-// 	// tree.Add("GET", "/{param:*}", generateHandler())
-// 	tree.Add("GET", "/{param}/", generateHandler())
-// 	// tree.Add("GET", "/{param}", generateHandler())
-// 	tree.Add("GET", "/{param:[a-zA-Z]{10}}/paco/", generateHandler())
-// 	tree.Add("GET", "/juan/hello{param:[a-zA-Z]{10}}/paco/", generateHandler())
-// 	tree.Add("GET", "/juan/hello{param:[a-zA-Z]{10}}jesus/paco/", generateHandler())
-
-// 	tree.Get("GET", "/data/", nil)
-
-// 	println("Hola")
-// }
