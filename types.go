@@ -9,8 +9,8 @@ import (
 // handler functions via configurable routes
 type Router struct {
 	parent          *Router
-	tree            *radix.Tree
 	beginPath       string
+	trees           map[string]*radix.Tree
 	registeredPaths map[string][]string
 
 	// If enabled, adds the matched route path onto the ctx.UserValue context

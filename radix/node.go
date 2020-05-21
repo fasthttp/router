@@ -8,36 +8,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-func newNodeAndHandler(method, path string, lastSegment bool) (*node, *nodeHandler) {
-	nHandler := &nodeHandler{tsr: lastSegment && path != "/" && path[len(path)-1] == '/'}
-
-	n := &node{
-		nType:    static,
-		path:     path,
-		handlers: map[string]*nodeHandler{method: nHandler},
+func newNode(path string) *node {
+	return &node{
+		nType: static,
+		path:  path,
 	}
-
-	if !lastSegment || path == "/" {
-		return n, nHandler
-	}
-
-	nHandlerTSR := &nodeHandler{tsr: !nHandler.tsr}
-
-	if nHandler.tsr {
-		n.path = n.path[:len(n.path)-1]
-	}
-
-	n.children = append(n.children, &node{
-		nType:    static,
-		path:     "/",
-		handlers: map[string]*nodeHandler{method: nHandlerTSR},
-	})
-
-	if !nHandler.tsr {
-		return n, nHandler
-	}
-
-	return n, nHandlerTSR
 }
 
 // conflict raises a panic with some details
@@ -66,7 +41,8 @@ func (n node) clone() *node {
 	cloneNode := new(node)
 	cloneNode.nType = n.nType
 	cloneNode.path = n.path
-	cloneNode.handlers = n.handlers
+	cloneNode.tsr = n.tsr
+	cloneNode.handler = n.handler
 
 	if len(n.children) > 0 {
 		cloneNode.children = make([]*node, len(n.children))
@@ -76,11 +52,22 @@ func (n node) clone() *node {
 		}
 	}
 
+	if n.wildcard != nil {
+		cloneNode.wildcard = &nodeWildcard{
+			path:     n.wildcard.path,
+			paramKey: n.wildcard.paramKey,
+			handler:  n.wildcard.handler,
+		}
+	}
+
 	if len(n.paramKeys) > 0 {
 		cloneNode.paramKeys = make([]string, len(n.paramKeys))
 		copy(cloneNode.paramKeys, n.paramKeys)
 	}
-	cloneNode.paramRegex = n.paramRegex
+
+	if n.paramRegex != nil {
+		cloneNode.paramRegex = n.paramRegex.Copy()
+	}
 
 	return cloneNode
 }
@@ -93,7 +80,9 @@ func (n *node) split(i int) {
 	cloneChild.paramRegex = nil
 
 	n.path = n.path[:i]
-	n.handlers = nil
+	n.handler = nil
+	n.tsr = false
+	n.wildcard = nil
 	n.children = append(n.children[:0], cloneChild)
 }
 
@@ -122,71 +111,64 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 	return end, values
 }
 
-func (n *node) setHandler(method string, handler fasthttp.RequestHandler, fullPath string) {
-	if n.handlers == nil {
-		n.handlers = make(map[string]*nodeHandler)
-	}
-
-	nHandler := n.handlers[method]
-	if nHandler == nil {
-		nHandler = new(nodeHandler)
-		n.handlers[method] = nHandler
-	}
-
-	if nHandler.handler != nil || nHandler.tsr {
+func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
+	if n.handler != nil || n.tsr {
 		panicf("a handle is already registered for path '%s'", fullPath)
 	}
 
-	nHandler.handler = handler
+	n.handler = handler
+	foundTSR := false
 
 	// Set TSR in method
 	for i := range n.children {
-		nTSR := n.children[i]
+		child := n.children[i]
 
-		if nTSR.path != "/" {
+		if child.path != "/" {
 			continue
 		}
 
-		if nTSR.handlers == nil {
-			nTSR.handlers = make(map[string]*nodeHandler)
-		}
+		child.tsr = true
+		foundTSR = true
 
-		nTSR.handlers[method] = &nodeHandler{tsr: true}
+		break
+	}
+
+	if n.path != "/" && !foundTSR {
+		childTSR := newNode("/")
+		childTSR.tsr = true
+		n.children = append(n.children, childTSR)
 	}
 }
 
-func (n *node) insert(method, path, fullPath string, handler fasthttp.RequestHandler) *node {
+func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *node {
 	end := segmentEndIndex(path, true)
-	newNode, newNodeHandler := newNodeAndHandler(method, path, true)
+	child := newNode(path)
 
 	wp := findWildPath(path, fullPath)
 	if wp != nil {
-		lastSegment := len(path) == wp.end
-
 		j := end
 		if wp.start > 0 {
 			j = wp.start
-			lastSegment = false
 		}
 
-		newNode, newNodeHandler = newNodeAndHandler(method, path[:j], lastSegment)
+		child.path = path[:j]
 
 		if wp.start > 0 {
-			n.children = append(n.children, newNode)
+			n.children = append(n.children, child)
 
-			if !newNodeHandler.tsr {
-				newNode.handlers = nil
-			}
+			// if !child.tsr {
+			// 	childParent.handler = nil
+			// }
 
-			return newNode.insert(method, path[j:], fullPath, handler)
+			return child.insert(path[j:], fullPath, handler)
 		}
 
 		switch wp.pType {
 		case param:
 			// newNode.path = newNode.path[:wp.end]
-			newNode.nType = wp.pType
-			newNode.paramKeys = wp.keys
-			newNode.paramRegex = wp.regex
+			child.nType = wp.pType
+			child.paramKeys = wp.keys
+			child.paramRegex = wp.regex
 		case wildcard:
 			if len(path) == end && n.path[len(n.path)-1] != '/' {
 				panicf("no / before wildcard in path '%s'", fullPath)
@@ -196,32 +178,19 @@ func (n *node) insert(method, path, fullPath string, handler fasthttp.RequestHan
 
 			if n.path != "/" && n.path[len(n.path)-1] == '/' {
 				n.split(len(n.path) - 1)
-				n.handlers = map[string]*nodeHandler{method: {tsr: true}}
+				n.tsr = true
 
 				n = n.children[0]
 			}
 
-			newNodeWildcard := &nodeWildcard{
+			if n.wildcard != nil {
+				n.wildcard.conflict(path, fullPath)
+			}
+
+			n.wildcard = &nodeWildcard{
 				path:     wp.path,
 				paramKey: wp.keys[0],
 				handler:  handler,
-			}
-
-			nHandler := n.handlers[method]
-			if nHandler != nil {
-				if nHandler.wildcard != nil {
-					nHandler.wildcard.conflict(path, fullPath)
-				}
-
-				nHandler.wildcard = newNodeWildcard
-
-			} else {
-				if n.handlers == nil {
-					n.handlers = make(map[string]*nodeHandler)
-				}
-
-				newNodeHandler.wildcard = newNodeWildcard
-				n.handlers[method] = newNodeHandler
 			}
 
 			return n
@@ -229,37 +198,39 @@ func (n *node) insert(method, path, fullPath string, handler fasthttp.RequestHan
 
 		path = path[wp.end:]
 
-		if len(path) > 0 && len(newNode.children) == 0 {
-			n.children = append(n.children, newNode)
+		if len(path) > 0 {
+			n.children = append(n.children, child)
 
-			if !newNodeHandler.tsr {
-				newNode.handlers = nil
-			}
+			// if !child.tsr {
+			// 	childParent.handler = nil
+			// }
 
-			return newNode.insert(method, path, fullPath, handler)
+			return child.insert(path, fullPath, handler)
 		}
 	}
 
-	newNodeHandler.handler = handler
-	n.children = append(n.children, newNode)
+	child.handler = handler
+	n.children = append(n.children, child)
 
-	if newNode.path == "/" {
+	if child.path == "/" {
 		// Add TSR when split a edge and the remain path to insert is "/"
-		n.handlers = map[string]*nodeHandler{method: {tsr: true}}
+		n.tsr = true
+	} else if strings.HasSuffix(child.path, "/") {
+		child.split(len(child.path) - 1)
+		child.tsr = true
+	} else {
+		childTSR := newNode("/")
+		childTSR.tsr = true
+		child.children = append(child.children, childTSR)
 	}
 
-	if len(newNode.children) == 1 {
-		// New node has a TSR, so get the child node with path "/"
-		return newNode.children[0]
-	}
-
-	return newNode
+	return child
 }
 
 // add adds the handler to node for the given path
-func (n *node) add(method, path, fullPath string, handler fasthttp.RequestHandler) *node {
+func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node {
 	if n.path == path || len(path) == 0 {
-		n.setHandler(method, handler, fullPath)
+		n.setHandler(handler, fullPath)
 
 		return n
 	}
@@ -277,13 +248,13 @@ func (n *node) add(method, path, fullPath string, handler fasthttp.RequestHandle
 			}
 
 			if len(path) > i {
-				return child.add(method, path[i:], fullPath, handler)
+				return child.add(path[i:], fullPath, handler)
 			}
 		case param:
 			wp := findWildPath(path, fullPath)
 
 			isParam := wp.start == 0 && wp.pType == param
-			hasHandler := (child.handlers != nil && child.handlers[method] != nil) || handler == nil
+			hasHandler := child.handler != nil || handler == nil
 
 			if len(path) == wp.end && isParam && hasHandler {
 				// The current segment is a param and it's duplicated
@@ -293,22 +264,26 @@ func (n *node) add(method, path, fullPath string, handler fasthttp.RequestHandle
 
 			if len(path) > i {
 				if child.path == wp.path {
-					return child.add(method, path[i:], fullPath, handler)
+					return child.add(path[i:], fullPath, handler)
 				}
 
-				return n.insert(method, path, fullPath, handler)
+				return n.insert(path, fullPath, handler)
 			}
 		}
 
-		child.setHandler(method, handler, fullPath)
+		if path == "/" {
+			n.tsr = true
+		}
+
+		child.setHandler(handler, fullPath)
 
 		return child
 	}
 
-	return n.insert(method, path, fullPath, handler)
+	return n.insert(path, fullPath, handler)
 }
 
-func (n *node) getFromChild(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 walk:
 	for {
 		for _, child := range n.children {
@@ -332,23 +307,20 @@ walk:
 					continue walk
 
 				} else if path == child.path {
-					nHandler := child.handlers[method]
-
 					switch {
-					case nHandler == nil:
-					case nHandler.tsr:
+					case child.tsr:
 						return nil, true
-					case nHandler.handler != nil:
-						return nHandler.handler, false
-					case nHandler.wildcard != nil:
+					case child.handler != nil:
+						return child.handler, false
+					case child.wildcard != nil:
 						if ctx != nil {
-							ctx.SetUserValue(nHandler.wildcard.paramKey, path)
+							ctx.SetUserValue(child.wildcard.paramKey, path)
 						}
 
-						return nHandler.wildcard.handler, false
+						return child.wildcard.handler, false
 					}
 
-					return child.getFromMethodWild(ctx, path)
+					return nil, false
 				}
 
 			case param:
@@ -363,7 +335,7 @@ walk:
 				}
 
 				if len(path) > end {
-					h, tsr := child.getFromChild(method, path[end:], ctx)
+					h, tsr := child.getFromChild(path[end:], ctx)
 					if tsr {
 						return nil, tsr
 					} else if h != nil {
@@ -377,23 +349,18 @@ walk:
 					}
 
 				} else if len(path) == end {
-					nHandler := child.handlers[method]
-					if nHandler == nil {
-						nHandler = child.handlers[MethodWild]
-					}
-
 					switch {
-					case nHandler == nil:
-						return nil, false
-					case nHandler.tsr:
+					case child.tsr:
 						return nil, true
+					case child.handler == nil:
+						return nil, false
 					case ctx != nil:
 						for i, key := range child.paramKeys {
 							ctx.SetUserValue(key, values[i])
 						}
 					}
 
-					return nHandler.handler, false
+					return child.handler, false
 				}
 
 			default:
@@ -401,47 +368,19 @@ walk:
 			}
 		}
 
-		if n.handlers != nil {
-			nHandler := n.handlers[method]
-			if nHandler == nil {
-				nHandler = n.handlers[MethodWild]
+		if n.wildcard != nil {
+			if ctx != nil {
+				ctx.SetUserValue(n.wildcard.paramKey, path)
 			}
 
-			switch {
-			case nHandler == nil, nHandler.wildcard == nil:
-				return nil, false
-			case ctx != nil:
-				ctx.SetUserValue(nHandler.wildcard.paramKey, path)
-			}
-
-			return nHandler.wildcard.handler, false
+			return n.wildcard.handler, false
 		}
 
 		return nil, false
 	}
 }
 
-func (n *node) getFromMethodWild(ctx *fasthttp.RequestCtx, wildPath string) (fasthttp.RequestHandler, bool) {
-	nHandler := n.handlers[MethodWild]
-
-	switch {
-	case nHandler == nil:
-	case nHandler.tsr:
-		return nil, true
-	case nHandler.handler != nil:
-		return nHandler.handler, false
-	case nHandler.wildcard != nil:
-		if ctx != nil {
-			ctx.SetUserValue(nHandler.wildcard.paramKey, wildPath)
-		}
-
-		return nHandler.wildcard.handler, false
-	}
-
-	return nil, false
-}
-
-func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
+func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	if len(path) > len(n.path) {
 		if !strings.EqualFold(path[:len(n.path)], n.path) {
 			return false, false
@@ -450,7 +389,7 @@ func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, 
 		path = path[len(n.path):]
 		buf.WriteString(n.path)
 
-		found, tsr := n.findFromChild(method, path, buf)
+		found, tsr := n.findFromChild(path, buf)
 		if found {
 			return found, tsr
 		}
@@ -458,18 +397,9 @@ func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, 
 		bufferRemoveString(buf, n.path)
 
 	} else if strings.EqualFold(path, n.path) {
-		nHandler := n.handlers[method]
-		if nHandler == nil {
-			nHandler = n.handlers[MethodWild]
-
-			if nHandler == nil {
-				return false, false
-			}
-		}
-
 		buf.WriteString(n.path)
 
-		if nHandler.tsr {
+		if n.tsr {
 			if n.path == "/" {
 				bufferRemoveString(buf, n.path)
 			} else {
@@ -479,17 +409,17 @@ func (n *node) find(method, path string, buf *bytebufferpool.ByteBuffer) (bool, 
 			return true, true
 		}
 
-		return true, false
+		return n.handler != nil, false
 	}
 
 	return false, false
 }
 
-func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
+func (n *node) findFromChild(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 	for _, child := range n.children {
 		switch child.nType {
 		case static:
-			found, tsr := child.find(method, path, buf)
+			found, tsr := child.find(path, buf)
 			if found {
 				return found, tsr
 			}
@@ -507,28 +437,19 @@ func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer
 			buf.WriteString(path[:end])
 
 			if len(path) > end {
-				found, tsr := child.findFromChild(method, path[end:], buf)
+				found, tsr := child.findFromChild(path[end:], buf)
 				if found {
 					return found, tsr
 				}
 
 			} else if len(path) == end {
-				nHandler := child.handlers[method]
-				if nHandler == nil {
-					nHandler = child.handlers[MethodWild]
-
-					if nHandler == nil {
-						return false, false
-					}
-				}
-
-				if nHandler.tsr {
+				if child.tsr {
 					buf.WriteByte('/')
 
 					return true, true
 				}
 
-				return true, false
+				return child.handler != nil, false
 			}
 
 			bufferRemoveString(buf, path[:end])
@@ -538,17 +459,10 @@ func (n *node) findFromChild(method, path string, buf *bytebufferpool.ByteBuffer
 		}
 	}
 
-	if n.handlers != nil {
-		nHandler := n.handlers[method]
-		if nHandler == nil {
-			nHandler = n.handlers[MethodWild]
-		}
+	if n.wildcard != nil {
+		buf.WriteString(path)
 
-		if nHandler != nil && nHandler.wildcard != nil {
-			buf.WriteString(path)
-
-			return true, false
-		}
+		return true, false
 	}
 
 	return false, false

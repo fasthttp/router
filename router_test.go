@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/savsgio/gotils"
 	"github.com/valyala/fasthttp"
 )
 
@@ -32,6 +34,20 @@ var httpMethods = []string{
 	fasthttp.MethodOptions,
 	fasthttp.MethodTrace,
 	MethodWild,
+}
+
+func randomHTTPMethod() string {
+	method := httpMethods[rand.Intn(len(httpMethods)-1)]
+
+	for method == MethodWild {
+		method = httpMethods[rand.Intn(len(httpMethods)-1)]
+	}
+
+	return method
+}
+
+func buildLocation(host, path string) string {
+	return fmt.Sprintf("http://%s%s", host, path)
 }
 
 var zeroTCPAddr = &net.TCPAddr{
@@ -215,7 +231,7 @@ func TestRouterAPI(t *testing.T) {
 	for _, method := range httpMethods {
 		request(method, "/ANY")
 		if !any {
-			t.Error("routing ANY failed")
+			t.Errorf("routing ANY failed - Method: %s", method)
 		}
 
 		any = false
@@ -515,47 +531,62 @@ func TestRouterNotAllowed(t *testing.T) {
 	}
 }
 
-func TestRouterNotFound(t *testing.T) {
+func testRouterNotFoundByMethod(t *testing.T, method string) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 	host := "fast"
 
-	var buildLocation = func(path string) string {
-		return fmt.Sprintf("http://%s%s", host, path)
+	router := New()
+	router.Handle(method, "/path", handlerFunc)
+	router.Handle(method, "/dir/", handlerFunc)
+	router.Handle(method, "/", handlerFunc)
+	router.Handle(method, "/{proc}/StaTus", handlerFunc)
+	router.Handle(method, "/USERS/{name}/enTRies/", handlerFunc)
+	router.Handle(method, "/static/{filepath:*}", handlerFunc)
+
+	// Moved Permanently, request with GET method
+	codeRedirect := fasthttp.StatusMovedPermanently
+	if method != fasthttp.MethodGet {
+		// Permanent Redirect, request with same method
+		codeRedirect = fasthttp.StatusPermanentRedirect
 	}
 
-	router := New()
-	router.GET("/path", handlerFunc)
-	router.GET("/dir/", handlerFunc)
-	router.GET("/", handlerFunc)
-	router.GET("/{proc}/StaTus", handlerFunc)
-	router.GET("/USERS/{name}/enTRies/", handlerFunc)
-	router.GET("/static/{filepath:*}", handlerFunc)
-
-	testRoutes := []struct {
+	type testRoute struct {
 		route    string
 		code     int
 		location string
-	}{
-		{"/path/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                   // TSR -/
-		{"/dir", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                     // TSR +/
-		{"", fasthttp.StatusOK, ""},                                                                           // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/PATH", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                    // Fixed Case
-		{"/DIR/", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                    // Fixed Case
-		{"/PATH/", fasthttp.StatusMovedPermanently, buildLocation("/path")},                                   // Fixed Case -/
-		{"/DIR", fasthttp.StatusMovedPermanently, buildLocation("/dir/")},                                     // Fixed Case +/
-		{"/paTh/?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")},                 // Fixed Case With Query Params +/
-		{"/paTh?name=foo", fasthttp.StatusMovedPermanently, buildLocation("/path?name=foo")},                  // Fixed Case With Query Params +/
-		{"/../path", fasthttp.StatusOK, ""},                                                                   // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/nope", fasthttp.StatusNotFound, ""},                                                                // NotFound
-		{"/sergio/status/", fasthttp.StatusMovedPermanently, buildLocation("/sergio/StaTus")},                 // Fixed Case With Params -/
-		{"/users/atreugo/eNtriEs", fasthttp.StatusMovedPermanently, buildLocation("/USERS/atreugo/enTRies/")}, // Fixed Case With Params +/
-		{"/STatiC/test.go", fasthttp.StatusMovedPermanently, buildLocation("/static/test.go")},                // Fixed Case Wildcard
+	}
+
+	testRoutes := []testRoute{
+		{"", fasthttp.StatusOK, ""},            // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/../path", fasthttp.StatusOK, ""},    // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/nope", fasthttp.StatusNotFound, ""}, // NotFound
+	}
+
+	if method != fasthttp.MethodConnect {
+		testRoutes = append(testRoutes, []testRoute{
+			{"/path/", codeRedirect, buildLocation(host, "/path")},                                   // TSR -/
+			{"/dir", codeRedirect, buildLocation(host, "/dir/")},                                     // TSR +/
+			{"/PATH", codeRedirect, buildLocation(host, "/path")},                                    // Fixed Case
+			{"/DIR/", codeRedirect, buildLocation(host, "/dir/")},                                    // Fixed Case
+			{"/PATH/", codeRedirect, buildLocation(host, "/path")},                                   // Fixed Case -/
+			{"/DIR", codeRedirect, buildLocation(host, "/dir/")},                                     // Fixed Case +/
+			{"/paTh/?name=foo", codeRedirect, buildLocation(host, "/path?name=foo")},                 // Fixed Case With Query Params +/
+			{"/paTh?name=foo", codeRedirect, buildLocation(host, "/path?name=foo")},                  // Fixed Case With Query Params +/
+			{"/sergio/status/", codeRedirect, buildLocation(host, "/sergio/StaTus")},                 // Fixed Case With Params -/
+			{"/users/atreugo/eNtriEs", codeRedirect, buildLocation(host, "/USERS/atreugo/enTRies/")}, // Fixed Case With Params +/
+			{"/STatiC/test.go", codeRedirect, buildLocation(host, "/static/test.go")},                // Fixed Case Wildcard
+		}...)
+	}
+
+	reqMethod := method
+	if method == MethodWild {
+		reqMethod = randomHTTPMethod()
 	}
 
 	for _, tr := range testRoutes {
 		ctx := new(fasthttp.RequestCtx)
 
-		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+		ctx.Request.Header.SetMethod(reqMethod)
 		ctx.Request.SetRequestURI(tr.route)
 		ctx.Request.SetHost(host)
 		router.Handler(ctx)
@@ -563,7 +594,7 @@ func TestRouterNotFound(t *testing.T) {
 		statusCode := ctx.Response.StatusCode()
 		location := string(ctx.Response.Header.Peek("Location"))
 		if !(statusCode == tr.code && (statusCode == fasthttp.StatusNotFound || location == tr.location)) {
-			t.Errorf("NotFound handling route %s failed: Code=%d, Header=%v", tr.route, statusCode, location)
+			t.Errorf("NotFound handling route %s failed: ReqMethod=%s, Code=%d, Header=%v", method, tr.route, statusCode, location)
 		}
 	}
 
@@ -576,13 +607,24 @@ func TestRouterNotFound(t *testing.T) {
 		notFound = true
 	}
 
-	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.Header.SetMethod(reqMethod)
 	ctx.Request.SetRequestURI("/nope")
 	router.Handler(ctx)
 	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound && notFound == true) {
 		t.Errorf("Custom NotFound handler failed: Code=%d, Header=%v", ctx.Response.StatusCode(), ctx.Response.Header.String())
 	}
 	ctx.Response.Reset()
+}
+
+func TestRouterNotFound(t *testing.T) {
+	for _, method := range httpMethods {
+		testRouterNotFoundByMethod(t, method)
+	}
+
+	router := New()
+	handlerFunc := func(_ *fasthttp.RequestCtx) {}
+	host := "fast"
+	ctx := new(fasthttp.RequestCtx)
 
 	// Test other method than GET (want 308 instead of 301)
 	router.PATCH("/path", handlerFunc)
@@ -591,7 +633,7 @@ func TestRouterNotFound(t *testing.T) {
 	ctx.Request.SetRequestURI("/path/?key=val")
 	ctx.Request.SetHost(host)
 	router.Handler(ctx)
-	if !(ctx.Response.StatusCode() == fasthttp.StatusPermanentRedirect && string(ctx.Response.Header.Peek("Location")) == buildLocation("/path?key=val")) {
+	if !(ctx.Response.StatusCode() == fasthttp.StatusPermanentRedirect && string(ctx.Response.Header.Peek("Location")) == buildLocation(host, "/path?key=val")) {
 		t.Errorf("Custom NotFound handler failed: Code=%d, Header=%v", ctx.Response.StatusCode(), ctx.Response.Header.String())
 	}
 	ctx.Response.Reset()
@@ -605,6 +647,51 @@ func TestRouterNotFound(t *testing.T) {
 	router.Handler(ctx)
 	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound) {
 		t.Errorf("NotFound handling route / failed: Code=%d", ctx.Response.StatusCode())
+	}
+}
+
+func TestRouterNotFound_MethodWild(t *testing.T) {
+	postFound, anyFound := false, false
+
+	router := New()
+	router.ANY("/{path:*}", func(ctx *fasthttp.RequestCtx) { anyFound = true })
+	router.POST("/specific", func(ctx *fasthttp.RequestCtx) { postFound = true })
+
+	for i := 0; i < 100; i++ {
+		router.Handle(
+			randomHTTPMethod(),
+			fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 5))),
+			func(ctx *fasthttp.RequestCtx) {},
+		)
+	}
+
+	ctx := new(fasthttp.RequestCtx)
+	var request = func(method, path string) {
+		ctx.Request.Header.SetMethod(method)
+		ctx.Request.SetRequestURI(path)
+		router.Handler(ctx)
+	}
+
+	for _, method := range httpMethods {
+		request(method, "/specific")
+
+		if method == fasthttp.MethodPost {
+			if !postFound {
+				t.Errorf("Method '%s': not found", method)
+			}
+		} else {
+			if !anyFound {
+				t.Errorf("Method 'ANY' not found with request method %s", method)
+			}
+		}
+
+		status := ctx.Response.StatusCode()
+		if status != fasthttp.StatusOK {
+			t.Errorf("Response status code == %d, want %d", status, fasthttp.StatusOK)
+		}
+
+		postFound, anyFound = false, false
+		ctx.Response.Reset()
 	}
 }
 
@@ -637,7 +724,12 @@ func TestRouterPanicHandler(t *testing.T) {
 	}
 }
 
-func TestRouterLookup(t *testing.T) {
+func testRouterLookupByMethod(t *testing.T, method string) {
+	reqMethod := method
+	if method == MethodWild {
+		reqMethod = randomHTTPMethod()
+	}
+
 	routed := false
 	wantHandle := func(_ *fasthttp.RequestCtx) {
 		routed = true
@@ -648,7 +740,7 @@ func TestRouterLookup(t *testing.T) {
 	router := New()
 
 	// try empty router first
-	handle, tsr := router.Lookup(fasthttp.MethodGet, "/nope", ctx)
+	handle, tsr := router.Lookup(reqMethod, "/nope", ctx)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}
@@ -657,8 +749,8 @@ func TestRouterLookup(t *testing.T) {
 	}
 
 	// insert route and try again
-	router.GET("/user/{name}", wantHandle)
-	handle, _ = router.Lookup(fasthttp.MethodGet, "/user/gopher", ctx)
+	router.Handle(method, "/user/{name}", wantHandle)
+	handle, _ = router.Lookup(reqMethod, "/user/gopher", ctx)
 	if handle == nil {
 		t.Fatal("Got no handle!")
 	} else {
@@ -677,8 +769,8 @@ func TestRouterLookup(t *testing.T) {
 	routed = false
 
 	// route without param
-	router.GET("/user", wantHandle)
-	handle, _ = router.Lookup(fasthttp.MethodGet, "/user", ctx)
+	router.Handle(method, "/user", wantHandle)
+	handle, _ = router.Lookup(reqMethod, "/user", ctx)
 	if handle == nil {
 		t.Fatal("Got no handle!")
 	} else {
@@ -694,7 +786,7 @@ func TestRouterLookup(t *testing.T) {
 		}
 	}
 
-	handle, tsr = router.Lookup(fasthttp.MethodGet, "/user/gopher/", ctx)
+	handle, tsr = router.Lookup(reqMethod, "/user/gopher/", ctx)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}
@@ -702,12 +794,18 @@ func TestRouterLookup(t *testing.T) {
 		t.Error("Got no TSR recommendation!")
 	}
 
-	handle, tsr = router.Lookup(fasthttp.MethodGet, "/nope", ctx)
+	handle, tsr = router.Lookup(reqMethod, "/nope", ctx)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}
 	if tsr {
 		t.Error("Got wrong TSR recommendation!")
+	}
+}
+
+func TestRouterLookup(t *testing.T) {
+	for _, method := range httpMethods {
+		testRouterLookupByMethod(t, method)
 	}
 }
 
@@ -883,11 +981,11 @@ func BenchmarkAllowed(b *testing.B) {
 
 func BenchmarkRouterGet(b *testing.B) {
 	r := New()
-	r.GET("/", func(ctx *fasthttp.RequestCtx) {})
+	r.GET("/hello", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.SetRequestURI("/")
+	ctx.Request.SetRequestURI("/hello")
 
 	for i := 0; i < b.N; i++ {
 		r.Handler(ctx)
@@ -896,10 +994,11 @@ func BenchmarkRouterGet(b *testing.B) {
 
 func BenchmarkRouterANY(b *testing.B) {
 	r := New()
+	r.GET("/data", func(ctx *fasthttp.RequestCtx) {})
 	r.ANY("/", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
-	ctx.Request.Header.SetMethod("UNKNOWN")
+	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.SetRequestURI("/")
 
 	for i := 0; i < b.N; i++ {

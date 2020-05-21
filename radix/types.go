@@ -8,12 +8,6 @@ import (
 
 type nodeType uint8
 
-type nodeHandler struct {
-	tsr      bool
-	handler  fasthttp.RequestHandler
-	wildcard *nodeWildcard
-}
-
 type nodeWildcard struct {
 	path     string
 	paramKey string
@@ -24,8 +18,10 @@ type node struct {
 	nType nodeType
 
 	path     string
-	handlers map[string]*nodeHandler
+	tsr      bool
+	handler  fasthttp.RequestHandler
 	children []*node
+	wildcard *nodeWildcard
 
 	paramKeys  []string
 	paramRegex *regexp.Regexp
