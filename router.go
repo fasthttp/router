@@ -323,7 +323,7 @@ func (r *Router) tryRedirect(ctx *fasthttp.RequestCtx, tree *radix.Tree, tsr boo
 	if r.RedirectFixedPath {
 		uri := bytebufferpool.Get()
 		found := tree.FindCaseInsensitivePath(
-			CleanPath(path),
+			cleanPath(path),
 			r.RedirectTrailingSlash,
 			uri,
 		)
@@ -352,8 +352,8 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		defer r.recv(ctx)
 	}
 
-	path := gotils.B2S(ctx.Path())
-	method := gotils.B2S(ctx.Method())
+	path := gotils.B2S(ctx.Request.URI().Path())
+	method := gotils.B2S(ctx.Request.Header.Method())
 
 	if tree := r.trees[method]; tree != nil {
 		if handler, tsr := tree.Get(path, ctx); handler != nil {

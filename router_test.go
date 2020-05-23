@@ -1019,13 +1019,13 @@ func BenchmarkRouterNotFound(b *testing.B) {
 	}
 }
 
-func BenchmarkRouterCleanPath(b *testing.B) {
+func BenchmarkRouterFindCaseInsensitive(b *testing.B) {
 	r := New()
 	r.GET("/bench", func(ctx *fasthttp.RequestCtx) {})
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.SetRequestURI("/../bench/")
+	ctx.Request.SetRequestURI("/BenCh/.")
 
 	for i := 0; i < b.N; i++ {
 		r.Handler(ctx)
