@@ -991,38 +991,38 @@ func TestRouterSamePrefixParamRoute(t *testing.T) {
 	r.Handler(req)
 
 	if !routed1 {
-		t.Fatal("/foo/{id}/{pageSize}/{page} not routed.")
+		t.Error("/foo/{id}/{pageSize}/{page} not routed.")
 	}
 	if !routed2 {
-		t.Fatal("/foo/{id}/{iid} not routed")
+		t.Error("/foo/{id}/{iid} not routed")
 	}
 
 	if !routed3 {
-		t.Fatal("/foo/{id} not routed")
+		t.Error("/foo/{id} not routed")
 	}
 
 	if id1 != "1" {
-		t.Fatalf("/foo/{id}/{pageSize}/{page} id expect: 1 got %s", id1)
+		t.Errorf("/foo/{id}/{pageSize}/{page} id expect: 1 got %s", id1)
 	}
 
 	if pageSize != "20" {
-		t.Fatalf("/foo/{id}/{pageSize}/{page} pageSize expect: 20 got %s", pageSize)
+		t.Errorf("/foo/{id}/{pageSize}/{page} pageSize expect: 20 got %s", pageSize)
 	}
 
 	if page != "4" {
-		t.Fatalf("/foo/{id}/{pageSize}/{page} page expect: 4 got %s", page)
+		t.Errorf("/foo/{id}/{pageSize}/{page} page expect: 4 got %s", page)
 	}
 
 	if id2 != "2" {
-		t.Fatalf("/foo/{id}/{iid} id expect: 2 got %s", id2)
+		t.Errorf("/foo/{id}/{iid} id expect: 2 got %s", id2)
 	}
 
 	if iid != "3" {
-		t.Fatalf("/foo/{id}/{iid} iid expect: 3 got %s", iid)
+		t.Errorf("/foo/{id}/{iid} iid expect: 3 got %s", iid)
 	}
 
 	if id3 != "v3" {
-		t.Fatalf("/foo/{id} id expect: v3 got %s", id3)
+		t.Errorf("/foo/{id} id expect: v3 got %s", id3)
 	}
 }
 
