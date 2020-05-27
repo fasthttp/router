@@ -353,7 +353,8 @@ walk:
 					case child.tsr:
 						return nil, true
 					case child.handler == nil:
-						return nil, false
+						// try another child
+						continue
 					case ctx != nil:
 						for i, key := range child.paramKeys {
 							ctx.SetUserValue(key, values[i])

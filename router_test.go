@@ -958,6 +958,74 @@ func TestRouterList(t *testing.T) {
 
 }
 
+func TestRouterIssue33(t *testing.T) {
+	var id1, id2, id3, pageSize, page, iid string
+	var routed1, routed2, routed3 bool
+
+	r := New()
+	v1 := r.Group("/v1")
+	v1.GET("/foo/{id}/{pageSize}/{page}", func(ctx *fasthttp.RequestCtx) {
+		id1 = ctx.UserValue("id").(string)
+		pageSize = ctx.UserValue("pageSize").(string)
+		page = ctx.UserValue("page").(string)
+		routed1 = true
+	})
+	v1.GET("/foo/{id}/{iid}", func(ctx *fasthttp.RequestCtx) {
+		id2 = ctx.UserValue("id").(string)
+		iid = ctx.UserValue("iid").(string)
+		routed2 = true
+	})
+	v1.GET("/foo/{id}", func(ctx *fasthttp.RequestCtx) {
+		id3 = ctx.UserValue("id").(string)
+		routed3 = true
+	})
+
+	req := new(fasthttp.RequestCtx)
+	req.Request.SetRequestURI("/v1/foo/1/20/4")
+	r.Handler(req)
+	req = new(fasthttp.RequestCtx)
+	req.Request.SetRequestURI("/v1/foo/2/3")
+	r.Handler(req)
+	req = new(fasthttp.RequestCtx)
+	req.Request.SetRequestURI("/v1/foo/v3")
+	r.Handler(req)
+
+	if !routed1 {
+		t.Fatal("/foo/{id}/{pageSize}/{page} not routed.")
+	}
+	if !routed2 {
+		t.Fatal("/foo/{id}/{iid} not routed")
+	}
+
+	if !routed3 {
+		t.Fatal("/foo/{id} not routed")
+	}
+
+	if id1 != "1" {
+		t.Fatalf("/foo/{id}/{pageSize}/{page} id expect: 1 got %s", id1)
+	}
+
+	if pageSize != "20" {
+		t.Fatalf("/foo/{id}/{pageSize}/{page} pageSize expect: 20 got %s", pageSize)
+	}
+
+	if page != "4" {
+		t.Fatalf("/foo/{id}/{pageSize}/{page} page expect: 4 got %s", page)
+	}
+
+	if id2 != "2" {
+		t.Fatalf("/foo/{id}/{iid} id expect: 2 got %s", id2)
+	}
+
+	if iid != "3" {
+		t.Fatalf("/foo/{id}/{iid} iid expect: 3 got %s", iid)
+	}
+
+	if id3 != "v3" {
+		t.Fatalf("/foo/{id} id expect: v3 got %s", id3)
+	}
+}
+
 func BenchmarkAllowed(b *testing.B) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 
