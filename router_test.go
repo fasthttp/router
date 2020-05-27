@@ -958,7 +958,7 @@ func TestRouterList(t *testing.T) {
 
 }
 
-func TestRouterIssue33(t *testing.T) {
+func TestRouterSamePrefixParamRoute(t *testing.T) {
 	var id1, id2, id3, pageSize, page, iid string
 	var routed1, routed2, routed3 bool
 
