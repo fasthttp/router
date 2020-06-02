@@ -237,13 +237,15 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 			return r.globalAllowed
 		}
 	} else { // specific path
-		for method, routes := range r.registeredPaths {
+		for method := range r.trees {
 			// Skip the requested method - we already tried this one
 			if method == reqMethod || method == fasthttp.MethodOptions {
 				continue
 			}
 
-			if gotils.StringSliceInclude(routes, path) {
+			handle, _ := r.trees[method].Get(path, nil)
+			if handle != nil {
+				// Add request method to list of allowed methods
 				allowed = append(allowed, method)
 			}
 		}
