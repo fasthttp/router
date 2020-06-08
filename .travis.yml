@@ -13,8 +13,6 @@ go:
   - tip
 
 before_install:
-  - go get -u -v golang.org/x/tools/cmd/cover
-  - go get -u -v github.com/modocache/gover
   - go get -u -v github.com/mattn/goveralls
   - go get -t -v ./...
 
@@ -22,7 +20,6 @@ script:
   - go test -v -cover -race ./... -coverprofile=.coverprofile
 
   # send coverage
-  - $HOME/gopath/bin/gover
   - $HOME/gopath/bin/goveralls -coverprofile=.coverprofile -service=travis-ci
 
 jobs:
