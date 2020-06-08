@@ -200,8 +200,8 @@ This package just provides a very efficient request router with a few extra feat
 
 Have a look at these middleware examples:
 
-- [Auth Middleware](examples/auth)
-- [Multi Hosts Middleware](examples/hosts)
+- [Auth Middleware](_examples/auth)
+- [Multi Hosts Middleware](_examples/hosts)
 
 ## Chaining with the NotFound handler
 

@@ -1,53 +1,39 @@
 language: go
 
-sudo: false
-go:
-  - 1.9.x
-  - 1.10.x
-  - 1.11.x
-  - 1.12.x
-  - 1.13.x
-  - 1.14.x
-  - tip
-
 os:
   - linux
   - osx
+  - windows
 
-matrix:
-  allow_failures:
-    - go: tip
-  fast_finish: true
+go:
+  - 1.14.x
+  - 1.13.x
+  - 1.12.x
+  - 1.11.x
+  - tip
 
 before_install:
   - go get -u -v golang.org/x/tools/cmd/cover
   - go get -u -v github.com/modocache/gover
   - go get -u -v github.com/mattn/goveralls
-  - go get -v ./...
+  - go get -t -v ./...
 
 script:
-  # build test for supported platforms
-  - GOOS=linux go build
-  - GOOS=darwin go build
-  - GOOS=freebsd go build
-  - GOOS=windows go build
-  - |
-    if [[ $(uname) == Darwin ]]; then
-      # Last supported version for GOOS=386 is go1.14 in Darwin
-      if [[ $(go version | awk '{print $3}') =~ ^go1\.(9|10|11|12|13|14)$ ]]; then
-          GOARCH=386 go build
-      fi
-    else
-        GOARCH=386 go build
-    fi
-
-  # run tests
-  - |
-    pkgs=($(go list ./... | grep -v examples | tr '\n' ' '))
-    for i in "${!pkgs[@]}"; do
-      go test -v -cover -race -coverprofile=$i.coverprofile ${pkgs[i]}
-    done
+  - go test -v -cover -race ./... -coverprofile=.coverprofile
 
   # send coverage
   - $HOME/gopath/bin/gover
-  - $HOME/gopath/bin/goveralls -coverprofile=gover.coverprofile -service=travis-ci
+  - $HOME/gopath/bin/goveralls -coverprofile=.coverprofile -service=travis-ci
+
+jobs:
+  allow_failures:
+    - go: tip
+
+  include:
+    - stage: cross compilation
+      script:
+        - GOOS=linux go build
+        - GOOS=darwin go build
+        - GOOS=freebsd go build
+        - GOOS=windows go build
+        - GOARCH=386 go build
