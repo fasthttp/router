@@ -2,6 +2,7 @@ package router
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/valyala/fasthttp"
@@ -64,6 +65,10 @@ var cleanTests = []cleanPathTest{
 }
 
 func Test_cleanPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.SkipNow()
+	}
+
 	req := new(fasthttp.Request)
 	uri := req.URI()
 
