@@ -319,8 +319,8 @@ func TestRouterChaining(t *testing.T) {
 }
 
 func TestRouterMutable(t *testing.T) {
-	handler_1 := func(_ *fasthttp.RequestCtx) {}
-	handler_2 := func(_ *fasthttp.RequestCtx) {}
+	handler1 := func(_ *fasthttp.RequestCtx) {}
+	handler2 := func(_ *fasthttp.RequestCtx) {}
 
 	router := New()
 	router.Mutable(true)
@@ -330,7 +330,7 @@ func TestRouterMutable(t *testing.T) {
 	}
 
 	for _, method := range httpMethods {
-		router.Handle(method, "/", handler_1)
+		router.Handle(method, "/", handler1)
 	}
 
 	for method := range router.trees {
@@ -350,12 +350,12 @@ func TestRouterMutable(t *testing.T) {
 
 	for _, route := range routes {
 		for _, method := range httpMethods {
-			router.Handle(method, route, handler_1)
+			router.Handle(method, route, handler1)
 		}
 
 		for _, method := range httpMethods {
 			err := catchPanic(func() {
-				router.Handle(method, route, handler_2)
+				router.Handle(method, route, handler2)
 			})
 
 			if err == nil {
@@ -363,7 +363,7 @@ func TestRouterMutable(t *testing.T) {
 			}
 
 			h, _ := router.Lookup(method, route, nil)
-			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler_1).Pointer() {
+			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler1).Pointer() {
 				t.Errorf("Mutable 'false' - Method %s - Route %s - Handler updated", method, route)
 			}
 		}
@@ -372,7 +372,7 @@ func TestRouterMutable(t *testing.T) {
 
 		for _, method := range httpMethods {
 			err := catchPanic(func() {
-				router.Handle(method, route, handler_2)
+				router.Handle(method, route, handler2)
 			})
 
 			if err != nil {
@@ -380,7 +380,7 @@ func TestRouterMutable(t *testing.T) {
 			}
 
 			h, _ := router.Lookup(method, route, nil)
-			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler_2).Pointer() {
+			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler2).Pointer() {
 				t.Errorf("Method %s - Route %s - Handler is not updated", method, route)
 			}
 		}

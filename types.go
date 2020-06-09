@@ -76,6 +76,7 @@ type Router struct {
 	globalAllowed string
 }
 
+// Group is a sub-router to group paths
 type Group struct {
 	router    *Router
 	beginPath string

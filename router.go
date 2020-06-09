@@ -22,7 +22,7 @@ var (
 	MatchedRoutePathParam = fmt.Sprintf("__matchedRoutePath::%s__", gotils.RandBytes(make([]byte, 15)))
 )
 
-// New returns a new initialized Router.
+// New returns a new router.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func New() *Router {
 	return &Router{
@@ -35,7 +35,7 @@ func New() *Router {
 	}
 }
 
-// Group returns a new grouped Router.
+// Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Group {
 	return &Group{

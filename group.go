@@ -2,7 +2,7 @@ package router
 
 import "github.com/valyala/fasthttp"
 
-// Group returns a new grouped Router.
+// Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (g *Group) Group(path string) *Group {
 	path = g.beginPath + path
