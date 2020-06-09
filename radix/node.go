@@ -16,24 +16,18 @@ func newNode(path string) *node {
 }
 
 // conflict raises a panic with some details
-func (n *nodeWildcard) conflict(path, fullPath string) {
+func (n *nodeWildcard) conflict(path, fullPath string) error {
 	prefix := fullPath[:strings.LastIndex(fullPath, path)] + n.path
 
-	panicf(
-		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
-		path, fullPath, n.path, prefix,
-	)
+	return newRadixError(errWildcardConflict, path, fullPath, n.path, prefix)
 }
 
 // wildPathConflict raises a panic with some details
-func (n *node) wildPathConflict(path, fullPath string) {
+func (n *node) wildPathConflict(path, fullPath string) error {
 	pathSeg := strings.SplitN(path, "/", 2)[0]
 	prefix := fullPath[:strings.LastIndex(fullPath, path)] + n.path
 
-	panicf(
-		"'%s' in new path '%s' conflicts with existing wildcard '%s' in existing prefix '%s'",
-		pathSeg, fullPath, n.path, prefix,
-	)
+	return newRadixError(errWildPathConflict, pathSeg, fullPath, n.path, prefix)
 }
 
 // clone clones the current node in a new pointer
@@ -65,9 +59,7 @@ func (n node) clone() *node {
 		copy(cloneNode.paramKeys, n.paramKeys)
 	}
 
-	if n.paramRegex != nil {
-		cloneNode.paramRegex = n.paramRegex.Copy()
-	}
+	cloneNode.paramRegex = n.paramRegex
 
 	return cloneNode
 }
@@ -111,9 +103,9 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 	return end, values
 }
 
-func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
+func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) (*node, error) {
 	if n.handler != nil || n.tsr {
-		panicf("a handle is already registered for path '%s'", fullPath)
+		return n, newRadixError(errSetHandler, fullPath)
 	}
 
 	n.handler = handler
@@ -138,9 +130,11 @@ func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) {
 		childTSR.tsr = true
 		n.children = append(n.children, childTSR)
 	}
+
+	return n, nil
 }
 
-func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *node {
+func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) (*node, error) {
 	end := segmentEndIndex(path, true)
 	child := newNode(path)
 
@@ -156,10 +150,6 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *n
 		if wp.start > 0 {
 			n.children = append(n.children, child)
 
-			// if !child.tsr {
-			// 	childParent.handler = nil
-			// }
-
 			return child.insert(path[j:], fullPath, handler)
 		}
 
@@ -171,9 +161,9 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *n
 			child.paramRegex = wp.regex
 		case wildcard:
 			if len(path) == end && n.path[len(n.path)-1] != '/' {
-				panicf("no / before wildcard in path '%s'", fullPath)
+				return nil, newRadixError(errWildcardSlash, fullPath)
 			} else if len(path) != end {
-				panicf("wildcard routes are only allowed at the end of the path in path '%s'", fullPath)
+				return nil, newRadixError(errWildcardNotAtEnd, fullPath)
 			}
 
 			if n.path != "/" && n.path[len(n.path)-1] == '/' {
@@ -184,7 +174,11 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *n
 			}
 
 			if n.wildcard != nil {
-				n.wildcard.conflict(path, fullPath)
+				if n.wildcard.path == path {
+					return n, newRadixError(errSetWildcardHandler, fullPath)
+				}
+
+				return nil, n.wildcard.conflict(path, fullPath)
 			}
 
 			n.wildcard = &nodeWildcard{
@@ -193,17 +187,13 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *n
 				handler:  handler,
 			}
 
-			return n
+			return n, nil
 		}
 
 		path = path[wp.end:]
 
 		if len(path) > 0 {
 			n.children = append(n.children, child)
-
-			// if !child.tsr {
-			// 	childParent.handler = nil
-			// }
 
 			return child.insert(path, fullPath, handler)
 		}
@@ -224,15 +214,13 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) *n
 		child.children = append(child.children, childTSR)
 	}
 
-	return child
+	return child, nil
 }
 
 // add adds the handler to node for the given path
-func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node {
+func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*node, error) {
 	if n.path == path || len(path) == 0 {
-		n.setHandler(handler, fullPath)
-
-		return n
+		return n.setHandler(handler, fullPath)
 	}
 
 	for _, child := range n.children {
@@ -258,8 +246,11 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node
 
 			if len(path) == wp.end && isParam && hasHandler {
 				// The current segment is a param and it's duplicated
+				if child.path == path {
+					return child, newRadixError(errSetHandler, fullPath)
+				}
 
-				child.wildPathConflict(path, fullPath)
+				return nil, child.wildPathConflict(path, fullPath)
 			}
 
 			if len(path) > i {
@@ -275,9 +266,7 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) *node
 			n.tsr = true
 		}
 
-		child.setHandler(handler, fullPath)
-
-		return child
+		return child.setHandler(handler, fullPath)
 	}
 
 	return n.insert(path, fullPath, handler)

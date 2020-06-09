@@ -53,6 +53,17 @@ func (r *Router) saveMatchedRoutePath(path string, handler fasthttp.RequestHandl
 	}
 }
 
+// Mutable allows updating the route handler
+//
+// It's disabled by default
+//
+// WARNING: Use with care. It could generate unexpected behaviours
+func (r *Router) Mutable(v bool) {
+	for method := range r.trees {
+		r.trees[method].Mutable = v
+	}
+}
+
 // GET is a shortcut for router.Handle(fasthttp.MethodGet, path, handler)
 func (r *Router) GET(path string, handler fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodGet, path, handler)

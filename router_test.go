@@ -405,6 +405,61 @@ func TestRouterGroup(t *testing.T) {
 	})
 }
 
+func TestRouterMutable(t *testing.T) {
+	handler_1 := func(_ *fasthttp.RequestCtx) {}
+	handler_2 := func(_ *fasthttp.RequestCtx) {}
+
+	routes := []string{
+		"/",
+		"/api/{version}",
+		"/{filepath:*}",
+		"/user{user:.*}",
+	}
+
+	router := New()
+
+	for _, route := range routes {
+		for _, method := range httpMethods {
+			router.Handle(method, route, handler_1)
+		}
+
+		for _, method := range httpMethods {
+			err := catchPanic(func() {
+				router.Handle(method, route, handler_2)
+			})
+
+			if err == nil {
+				t.Errorf("Mutable 'false' - Method %s - Route %s - Expected panic", method, route)
+			}
+
+			h, _ := router.Lookup(method, route, nil)
+			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler_1).Pointer() {
+				t.Errorf("Mutable 'false' - Method %s - Route %s - Handler updated", method, route)
+			}
+		}
+
+		router.Mutable(true)
+
+		for _, method := range httpMethods {
+			err := catchPanic(func() {
+				router.Handle(method, route, handler_2)
+			})
+
+			if err != nil {
+				t.Errorf("Mutable 'true' - Method %s - Route %s - Unexpected panic: %v", method, route, err)
+			}
+
+			h, _ := router.Lookup(method, route, nil)
+			if reflect.ValueOf(h).Pointer() != reflect.ValueOf(handler_2).Pointer() {
+				t.Errorf("Method %s - Route %s - Handler is not updated", method, route)
+			}
+		}
+
+		router.Mutable(false)
+	}
+
+}
+
 func TestRouterOPTIONS(t *testing.T) {
 	handlerFunc := func(_ *fasthttp.RequestCtx) {}
 

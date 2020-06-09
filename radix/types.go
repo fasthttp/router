@@ -41,4 +41,7 @@ type wildPath struct {
 // Tree is a routes storage
 type Tree struct {
 	root *node
+
+	// If enabled, the node handler could be updated
+	Mutable bool
 }

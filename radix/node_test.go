@@ -631,6 +631,15 @@ func TestTreeInvalidNodeType(t *testing.T) {
 }
 
 func TestTreeWildcardConflictEx(t *testing.T) {
+	routes := [...]string{
+		"/con{tact}",
+		"/who/are/{you:*}",
+		"/who/foo/hello",
+		"/whose/{users}/{name}",
+		"/{filepath:*}",
+		"/{id}",
+	}
+
 	conflicts := []struct {
 		route string
 
@@ -650,7 +659,17 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		{
 			route:       "/con{tact}",
 			wantErr:     true,
-			wantErrText: "'{tact}' in new path '/con{tact}' conflicts with existing wildcard '{tact}' in existing prefix '/con{tact}'",
+			wantErrText: "a handler is already registered for path '/con{tact}'",
+		},
+		{
+			route:       "/con{something}",
+			wantErr:     true,
+			wantErrText: "'{something}' in new path '/con{something}' conflicts with existing wild path '{tact}' in existing prefix '/con{tact}'",
+		},
+		{
+			route:       "/who/are/{you:*}",
+			wantErr:     true,
+			wantErrText: "a wildcard handler is already registered for path '/who/are/{you:*}'",
 		},
 		{
 			route:       "/who/are/{me:*}",
@@ -660,7 +679,7 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		{
 			route:       "/who/foo/hello",
 			wantErr:     true,
-			wantErrText: "a handle is already registered for path '/who/foo/hello'",
+			wantErrText: "a handler is already registered for path '/who/foo/hello'",
 		},
 		{
 			route:       "/{static:*}",
@@ -675,7 +694,7 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		{
 			route:       "/{user}/",
 			wantErr:     true,
-			wantErrText: "'{user}' in new path '/{user}/' conflicts with existing wildcard '{id}' in existing prefix '/{id}'",
+			wantErrText: "'{user}' in new path '/{user}/' conflicts with existing wild path '{id}' in existing prefix '/{id}'",
 		},
 		{
 			route:       "/prefix{filepath:*}",
@@ -689,15 +708,6 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 		// in an inconsistent state when the loop recovers from the
 		// panic which threw by 'addRoute' function.
 		tree := New()
-
-		routes := [...]string{
-			"/con{tact}",
-			"/who/are/{you:*}",
-			"/who/foo/hello",
-			"/whose/{users}/{name}",
-			"/{filepath:*}",
-			"/{id}",
-		}
 
 		for _, route := range routes {
 			tree.Add(route, fakeHandler(route))

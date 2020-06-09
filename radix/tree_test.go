@@ -260,6 +260,42 @@ func Test_TreeNilHandler(t *testing.T) {
 	}
 }
 
+func Test_TreeMutable(t *testing.T) {
+	routes := []string{
+		"/",
+		"/api/{version}",
+		"/{filepath:*}",
+		"/user{user:a-Z+}",
+	}
+
+	handler := generateHandler()
+	tree := New()
+
+	for _, route := range routes {
+		tree.Add(route, handler)
+
+		err := catchPanic(func() {
+			tree.Add(route, handler)
+		})
+
+		if err == nil {
+			t.Errorf("Route '%s' - Expected panic", route)
+		}
+	}
+
+	tree.Mutable = true
+
+	for _, route := range routes {
+		err := catchPanic(func() {
+			tree.Add(route, handler)
+		})
+
+		if err != nil {
+			t.Errorf("Route '%s' - Unexpected panic: %v", route, err)
+		}
+	}
+}
+
 func Benchmark_Get(b *testing.B) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
 

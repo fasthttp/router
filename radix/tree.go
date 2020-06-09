@@ -37,7 +37,22 @@ func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
 		path = path[i:]
 	}
 
-	t.root.add(path, fullPath, handler)
+	n, err := t.root.add(path, fullPath, handler)
+	if err != nil {
+		radixErr := err.(*radixError)
+		if t.Mutable && !n.tsr {
+			switch radixErr.msg {
+			case errSetHandler:
+				n.handler = handler
+				return
+			case errSetWildcardHandler:
+				n.wildcard.handler = handler
+				return
+			}
+		}
+
+		panic(err)
+	}
 
 	if len(t.root.path) == 0 {
 		t.root = t.root.children[0]
