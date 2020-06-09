@@ -8,9 +8,8 @@ import (
 // Router is a fasthttp.RequestHandler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
-	parent          *Router
-	beginPath       string
 	trees           map[string]*radix.Tree
+	treeMutable     bool
 	registeredPaths map[string][]string
 
 	// If enabled, adds the matched route path onto the ctx.UserValue context
@@ -75,4 +74,9 @@ type Router struct {
 
 	// Cached value of global (*) allowed methods
 	globalAllowed string
+}
+
+type Group struct {
+	router    *Router
+	beginPath string
 }

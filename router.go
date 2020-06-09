@@ -26,7 +26,6 @@ var (
 // Path auto-correction, including trailing slashes, is enabled by default.
 func New() *Router {
 	return &Router{
-		beginPath:              "/",
 		trees:                  make(map[string]*radix.Tree),
 		registeredPaths:        make(map[string][]string),
 		RedirectTrailingSlash:  true,
@@ -38,12 +37,11 @@ func New() *Router {
 
 // Group returns a new grouped Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
-func (r *Router) Group(path string) *Router {
-	g := New()
-	g.parent = r
-	g.beginPath = path
-
-	return g
+func (r *Router) Group(path string) *Group {
+	return &Group{
+		router:    r,
+		beginPath: path,
+	}
 }
 
 func (r *Router) saveMatchedRoutePath(path string, handler fasthttp.RequestHandler) fasthttp.RequestHandler {
@@ -59,9 +57,16 @@ func (r *Router) saveMatchedRoutePath(path string, handler fasthttp.RequestHandl
 //
 // WARNING: Use with care. It could generate unexpected behaviours
 func (r *Router) Mutable(v bool) {
+	r.treeMutable = v
+
 	for method := range r.trees {
 		r.trees[method].Mutable = v
 	}
+}
+
+// List returns all registered routes grouped by method
+func (r *Router) List() map[string][]string {
+	return r.registeredPaths
 }
 
 // GET is a shortcut for router.Handle(fasthttp.MethodGet, path, handler)
@@ -106,59 +111,6 @@ func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
 	r.Handle(MethodWild, path, handler)
 }
 
-// Handle registers a new request handler with the given path and method.
-//
-// For GET, POST, PUT, PATCH and DELETE requests the respective shortcut
-// functions can be used.
-//
-// This function is intended for bulk loading and to allow the usage of less
-// frequently used, non-standardized or custom methods (e.g. for internal
-// communication with a proxy).
-func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
-	switch {
-	case len(method) == 0:
-		panic("method must not be empty")
-	case len(path) < 1 || path[0] != '/':
-		panic("path must begin with '/' in path '" + path + "'")
-	case handler == nil:
-		panic("handler must not be nil")
-	}
-
-	if r.beginPath != "/" {
-		path = r.beginPath + path
-	}
-
-	r.registeredPaths[method] = append(r.registeredPaths[method], path)
-
-	// Call to the parent recursively until main router to register paths in it
-	if r.parent != nil {
-		r.parent.Handle(method, path, handler)
-		return
-	}
-
-	tree := r.trees[method]
-	if tree == nil {
-		tree = radix.New()
-		r.trees[method] = tree
-		r.globalAllowed = r.allowed("*", "")
-	}
-
-	if r.SaveMatchedRoutePath {
-		handler = r.saveMatchedRoutePath(path, handler)
-	}
-
-	optionalPaths := getOptionalPaths(path)
-
-	// if not has optional paths, adds the original
-	if len(optionalPaths) == 0 {
-		tree.Add(path, handler)
-	} else {
-		for _, p := range optionalPaths {
-			tree.Add(p, handler)
-		}
-	}
-}
-
 // ServeFiles serves files from the given file system root.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
@@ -172,15 +124,6 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 
 	if !strings.HasSuffix(path, suffix) {
 		panic("path must end with " + suffix + " in path '" + path + "'")
-	}
-
-	if r.beginPath != "/" {
-		path = r.beginPath + path
-	}
-
-	if r.parent != nil {
-		r.parent.ServeFiles(path, rootPath)
-		return
 	}
 
 	prefix := path[:len(path)-len(suffix)]
@@ -205,15 +148,6 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 		panic("path must end with " + suffix + " in path '" + path + "'")
 	}
 
-	if r.beginPath != "/" {
-		path = r.beginPath + path
-	}
-
-	if r.parent != nil {
-		r.parent.ServeFilesCustom(path, fs)
-		return
-	}
-
 	prefix := path[:len(path)-len(suffix)]
 	stripSlashes := strings.Count(prefix, "/")
 
@@ -223,6 +157,71 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	fileHandler := fs.NewRequestHandler()
 
 	r.GET(path, fileHandler)
+}
+
+// Handle registers a new request handler with the given path and method.
+//
+// For GET, POST, PUT, PATCH and DELETE requests the respective shortcut
+// functions can be used.
+//
+// This function is intended for bulk loading and to allow the usage of less
+// frequently used, non-standardized or custom methods (e.g. for internal
+// communication with a proxy).
+func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
+	switch {
+	case len(method) == 0:
+		panic("method must not be empty")
+	case len(path) < 1 || path[0] != '/':
+		panic("path must begin with '/' in path '" + path + "'")
+	case handler == nil:
+		panic("handler must not be nil")
+	}
+
+	r.registeredPaths[method] = append(r.registeredPaths[method], path)
+
+	tree := r.trees[method]
+	if tree == nil {
+		tree = radix.New()
+		tree.Mutable = r.treeMutable
+
+		r.trees[method] = tree
+		r.globalAllowed = r.allowed("*", "")
+	}
+
+	if r.SaveMatchedRoutePath {
+		handler = r.saveMatchedRoutePath(path, handler)
+	}
+
+	optionalPaths := getOptionalPaths(path)
+
+	// if not has optional paths, adds the original
+	if len(optionalPaths) == 0 {
+		tree.Add(path, handler)
+	} else {
+		for _, p := range optionalPaths {
+			tree.Add(p, handler)
+		}
+	}
+}
+
+// Lookup allows the manual lookup of a method + path combo.
+// This is e.g. useful to build a framework around this router.
+// If the path was found, it returns the handler function and the path parameter
+// values. Otherwise the third return value indicates whether a redirection to
+// the same path with an extra / without the trailing slash should be performed.
+func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+	if tree := r.trees[method]; tree != nil {
+		handler, tsr := tree.Get(path, ctx)
+		if handler != nil || tsr {
+			return handler, tsr
+		}
+	}
+
+	if tree := r.trees[MethodWild]; tree != nil {
+		return tree.Get(path, ctx)
+	}
+
+	return nil, false
 }
 
 func (r *Router) recv(ctx *fasthttp.RequestCtx) {
@@ -279,26 +278,6 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 		return strings.Join(allowed, ", ")
 	}
 	return
-}
-
-// Lookup allows the manual lookup of a method + path combo.
-// This is e.g. useful to build a framework around this router.
-// If the path was found, it returns the handler function and the path parameter
-// values. Otherwise the third return value indicates whether a redirection to
-// the same path with an extra / without the trailing slash should be performed.
-func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
-	if tree := r.trees[method]; tree != nil {
-		handler, tsr := tree.Get(path, ctx)
-		if handler != nil || tsr {
-			return handler, tsr
-		}
-	}
-
-	if tree := r.trees[MethodWild]; tree != nil {
-		return tree.Get(path, ctx)
-	}
-
-	return nil, false
 }
 
 func (r *Router) tryRedirect(ctx *fasthttp.RequestCtx, tree *radix.Tree, tsr bool, method, path string) bool {
@@ -422,9 +401,4 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 	} else {
 		ctx.Error(fasthttp.StatusMessage(fasthttp.StatusNotFound), fasthttp.StatusNotFound)
 	}
-}
-
-// List returns all registered routes grouped by method
-func (r *Router) List() map[string][]string {
-	return r.registeredPaths
 }
