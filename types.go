@@ -78,6 +78,6 @@ type Router struct {
 
 // Group is a sub-router to group paths
 type Group struct {
-	router    *Router
-	beginPath string
+	router *Router
+	prefix string
 }

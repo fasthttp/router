@@ -39,8 +39,8 @@ func New() *Router {
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Group {
 	return &Group{
-		router:    r,
-		beginPath: path,
+		router: r,
+		prefix: path,
 	}
 }
 
@@ -116,20 +116,16 @@ func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
 // path /defined/root/dir/{filepath:*}.
 // For example if root is "/etc" and {filepath:*} is "passwd", the local file
 // "/etc/passwd" would be served.
-// Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
+// Internally a fasthttp.FSHandler is used, therefore fasthttp.NotFound is used instead
 // Use:
 //     router.ServeFiles("/src/{filepath:*}", "./")
 func (r *Router) ServeFiles(path string, rootPath string) {
-	suffix := "/{filepath:*}"
-
-	if !strings.HasSuffix(path, suffix) {
-		panic("path must end with " + suffix + " in path '" + path + "'")
-	}
-
-	prefix := path[:len(path)-len(suffix)]
-	fileHandler := fasthttp.FSHandler(rootPath, strings.Count(prefix, "/"))
-
-	r.GET(path, fileHandler)
+	r.ServeFilesCustom(path, &fasthttp.FS{
+		Root:               rootPath,
+		IndexNames:         []string{"index.html"},
+		GenerateIndexPages: true,
+		AcceptByteRange:    true,
+	})
 }
 
 // ServeFilesCustom serves files from the given file system settings.
