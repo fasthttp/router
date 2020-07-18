@@ -217,6 +217,9 @@ func TestTreeChildConflict(t *testing.T) {
 		{"/{id}/", true},
 		{"/{filepath:*}", false},
 		{"/asd{filepath:*}", true},
+		{"/abc", false},
+		{"/abd", false},
+		{"/abcc", false},
 	}
 
 	testRoutes(t, routes)

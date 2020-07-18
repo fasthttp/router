@@ -219,7 +219,7 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) (*
 
 // add adds the handler to node for the given path
 func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*node, error) {
-	if n.path == path || len(path) == 0 {
+	if len(path) == 0 {
 		return n.setHandler(handler, fullPath)
 	}
 
