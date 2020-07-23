@@ -155,7 +155,8 @@ func (n *node) insert(path, fullPath string, handler fasthttp.RequestHandler) (*
 
 		switch wp.pType {
 		case param:
-			// newNode.path = newNode.path[:wp.end]
+			n.hasWildChild = true
+
 			child.nType = wp.pType
 			child.paramKeys = wp.keys
 			child.paramRegex = wp.regex
@@ -273,9 +274,15 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*nod
 }
 
 func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
+	var parent *node
+
+	parentIndex, childIndex := 0, 0
+
 walk:
 	for {
-		for _, child := range n.children {
+		for _, child := range n.children[childIndex:] {
+			childIndex++
+
 			switch child.nType {
 			case static:
 
@@ -292,7 +299,12 @@ walk:
 
 					path = path[len(child.path):]
 
+					parent = n
 					n = child
+
+					parentIndex = childIndex
+					childIndex = 0
+
 					continue walk
 
 				} else if path == child.path {
@@ -356,6 +368,22 @@ walk:
 			default:
 				panic("invalid node type")
 			}
+
+		}
+
+		// Go back and continue with the remaining children of the parent
+		// to try to discover the correct child node
+		// if the parent has a child node of type param
+		//
+		// See: https://github.com/fasthttp/router/issues/37
+		if parent != nil && parent.hasWildChild && len(parent.children[parentIndex:]) > 0 {
+			path = n.path + path
+			childIndex = parentIndex
+
+			n = parent
+			parent = nil
+
+			continue walk
 		}
 
 		if n.wildcard != nil {

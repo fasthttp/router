@@ -116,6 +116,8 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/doc/go1.html",
 		"/α",
 		"/β",
+		"/hello/test",
+		"/hello/{name}",
 	}
 
 	for _, route := range routes {
@@ -134,6 +136,10 @@ func TestTreeAddAndGet(t *testing.T) {
 		{"/ab", false, "/ab", nil},
 		{"/α", false, "/α", nil},
 		{"/β", false, "/β", nil},
+		{"/hello/test", false, "/hello/test", nil},
+		{"/hello/test1", false, "/hello/{name}", map[string]interface{}{"name": "test1"}},
+		{"/hello/tes", false, "/hello/{name}", map[string]interface{}{"name": "tes"}},
+		{"/hello/test/bye", true, "", nil},
 	})
 }
 

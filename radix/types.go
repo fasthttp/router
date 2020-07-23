@@ -17,11 +17,12 @@ type nodeWildcard struct {
 type node struct {
 	nType nodeType
 
-	path     string
-	tsr      bool
-	handler  fasthttp.RequestHandler
-	children []*node
-	wildcard *nodeWildcard
+	path         string
+	tsr          bool
+	handler      fasthttp.RequestHandler
+	hasWildChild bool
+	children     []*node
+	wildcard     *nodeWildcard
 
 	paramKeys  []string
 	paramRegex *regexp.Regexp
