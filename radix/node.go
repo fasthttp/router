@@ -315,7 +315,7 @@ walk:
 						return child.handler, false
 					case child.wildcard != nil:
 						if ctx != nil {
-							ctx.SetUserValue(child.wildcard.paramKey, path)
+							ctx.SetUserValue(child.wildcard.paramKey, copyString(path))
 						}
 
 						return child.wildcard.handler, false
@@ -326,7 +326,7 @@ walk:
 
 			case param:
 				end := segmentEndIndex(path, false)
-				values := []string{path[:end]}
+				values := []string{copyString(path[:end])}
 
 				if child.paramRegex != nil {
 					end, values = child.findEndIndexAndValues(path[:end])
@@ -388,7 +388,7 @@ walk:
 
 		if n.wildcard != nil {
 			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.paramKey, path)
+				ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
 			}
 
 			return n.wildcard.handler, false

@@ -1045,6 +1045,19 @@ func BenchmarkRouterGet(b *testing.B) {
 	}
 }
 
+func BenchmarkRouterParams(b *testing.B) {
+	r := New()
+	r.GET("/{id}", func(ctx *fasthttp.RequestCtx) {})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/hello")
+
+	for i := 0; i < b.N; i++ {
+		r.Handler(ctx)
+	}
+}
+
 func BenchmarkRouterANY(b *testing.B) {
 	r := New()
 	r.GET("/data", func(ctx *fasthttp.RequestCtx) {})
