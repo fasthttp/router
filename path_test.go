@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/savsgio/gotils"
 	"github.com/valyala/fasthttp"
 )
 
@@ -123,6 +124,32 @@ func TestGetOptionalPath(t *testing.T) {
 
 		if reflect.ValueOf(h).Pointer() != reflect.ValueOf(e.handler).Pointer() {
 			t.Errorf("Handler (path: %s) == %p, want %p", e.path, h, e.handler)
+		}
+	}
+
+	tests := []struct {
+		path          string
+		optionalPaths []string
+	}{
+		{"/hello", nil},
+		{"/{name}", nil},
+		{"/{name?:[a-zA-Z]{5}}", []string{"/", "/{name:[a-zA-Z]{5}}"}},
+		{"/{filepath:^(?!api).*}", nil},
+		{"/static/{filepath?:^(?!api).*}", []string{"/static", "/static/{filepath:^(?!api).*}"}},
+		{"/show/{name?}", []string{"/show", "/show/{name}"}},
+	}
+
+	for _, test := range tests {
+		optionalPaths := getOptionalPaths(test.path)
+
+		if len(optionalPaths) != len(test.optionalPaths) {
+			t.Errorf("getOptionalPaths() len == %d, want %d", len(optionalPaths), len(test.optionalPaths))
+		}
+
+		for _, wantPath := range test.optionalPaths {
+			if !gotils.StringSliceInclude(optionalPaths, wantPath) {
+				t.Errorf("The optional path is not returned for '%s': %s", test.path, wantPath)
+			}
 		}
 	}
 }

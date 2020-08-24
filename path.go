@@ -33,12 +33,21 @@ walk:
 		}
 
 		newPath := ""
+		hasRegex := false
 		questionMarkIndex := -1
+
+		brackets := 0
 
 		for end, c := range []byte(path[start:]) {
 			switch c {
+			case '{':
+				brackets++
+
 			case '}':
-				if questionMarkIndex == -1 {
+				if brackets > 0 {
+					brackets--
+					continue
+				} else if questionMarkIndex == -1 {
 					continue walk
 				}
 
@@ -51,13 +60,24 @@ walk:
 
 				continue walk
 
+			case ':':
+				hasRegex = true
+
 			case '?':
+				if hasRegex {
+					continue
+				}
+
 				questionMarkIndex = start + end
 				newPath += path[:questionMarkIndex]
 
-				// include the path without the wildcard
-				// -2 due to remove the '/' and '{'
-				if !gotils.StringSliceInclude(paths, path[:start-2]) {
+				if len(path[:start-2]) == 0 {
+					// include the root slash because the param is in the first segment
+					paths = append(paths, "/")
+
+				} else if !gotils.StringSliceInclude(paths, path[:start-2]) {
+					// include the path without the wildcard
+					// -2 due to remove the '/' and '{'
 					paths = append(paths, path[:start-2])
 				}
 			}
