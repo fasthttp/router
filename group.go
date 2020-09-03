@@ -18,11 +18,6 @@ func (g *Group) HEAD(path string, handler fasthttp.RequestHandler) {
 	g.router.HEAD(g.prefix+path, handler)
 }
 
-// OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
-func (g *Group) OPTIONS(path string, handler fasthttp.RequestHandler) {
-	g.router.OPTIONS(g.prefix+path, handler)
-}
-
 // POST is a shortcut for group.Handle(fasthttp.MethodPost, path, handler)
 func (g *Group) POST(path string, handler fasthttp.RequestHandler) {
 	g.router.POST(g.prefix+path, handler)
@@ -41,6 +36,21 @@ func (g *Group) PATCH(path string, handler fasthttp.RequestHandler) {
 // DELETE is a shortcut for group.Handle(fasthttp.MethodDelete, path, handler)
 func (g *Group) DELETE(path string, handler fasthttp.RequestHandler) {
 	g.router.DELETE(g.prefix+path, handler)
+}
+
+// OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
+func (g *Group) CONNECT(path string, handler fasthttp.RequestHandler) {
+	g.router.CONNECT(g.prefix+path, handler)
+}
+
+// OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
+func (g *Group) OPTIONS(path string, handler fasthttp.RequestHandler) {
+	g.router.OPTIONS(g.prefix+path, handler)
+}
+
+// OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
+func (g *Group) TRACE(path string, handler fasthttp.RequestHandler) {
+	g.router.TRACE(g.prefix+path, handler)
 }
 
 // ANY is a shortcut for group.Handle(router.MethodWild, path, handler)

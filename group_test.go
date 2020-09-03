@@ -101,11 +101,13 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 	shortcuts := []func(path string, handler fasthttp.RequestHandler){
 		g.GET,
 		g.HEAD,
-		g.OPTIONS,
 		g.POST,
 		g.PUT,
 		g.PATCH,
 		g.DELETE,
+		g.CONNECT,
+		g.OPTIONS,
+		g.TRACE,
 		g.ANY,
 	}
 

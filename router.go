@@ -115,11 +115,6 @@ func (r *Router) HEAD(path string, handler fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodHead, path, handler)
 }
 
-// OPTIONS is a shortcut for router.Handle(fasthttp.MethodOptions, path, handler)
-func (r *Router) OPTIONS(path string, handler fasthttp.RequestHandler) {
-	r.Handle(fasthttp.MethodOptions, path, handler)
-}
-
 // POST is a shortcut for router.Handle(fasthttp.MethodPost, path, handler)
 func (r *Router) POST(path string, handler fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodPost, path, handler)
@@ -138,6 +133,21 @@ func (r *Router) PATCH(path string, handler fasthttp.RequestHandler) {
 // DELETE is a shortcut for router.Handle(fasthttp.MethodDelete, path, handler)
 func (r *Router) DELETE(path string, handler fasthttp.RequestHandler) {
 	r.Handle(fasthttp.MethodDelete, path, handler)
+}
+
+// CONNECT is a shortcut for router.Handle(fasthttp.MethodConnect, path, handler)
+func (r *Router) CONNECT(path string, handler fasthttp.RequestHandler) {
+	r.Handle(fasthttp.MethodConnect, path, handler)
+}
+
+// OPTIONS is a shortcut for router.Handle(fasthttp.MethodOptions, path, handler)
+func (r *Router) OPTIONS(path string, handler fasthttp.RequestHandler) {
+	r.Handle(fasthttp.MethodOptions, path, handler)
+}
+
+// TRACE is a shortcut for router.Handle(fasthttp.MethodTrace, path, handler)
+func (r *Router) TRACE(path string, handler fasthttp.RequestHandler) {
+	r.Handle(fasthttp.MethodTrace, path, handler)
 }
 
 // ANY is a shortcut for router.Handle(router.MethodWild, path, handler)

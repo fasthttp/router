@@ -147,7 +147,7 @@ func TestRouter(t *testing.T) {
 }
 
 func TestRouterAPI(t *testing.T) {
-	var handled, get, head, options, post, put, patch, delete, any bool
+	var handled, get, head, post, put, patch, delete, connect, options, trace, any bool
 
 	httpHandler := func(ctx *fasthttp.RequestCtx) {
 		handled = true
@@ -160,9 +160,6 @@ func TestRouterAPI(t *testing.T) {
 	router.HEAD("/HEAD", func(ctx *fasthttp.RequestCtx) {
 		head = true
 	})
-	router.OPTIONS("/OPTIONS", func(ctx *fasthttp.RequestCtx) {
-		options = true
-	})
 	router.POST("/POST", func(ctx *fasthttp.RequestCtx) {
 		post = true
 	})
@@ -174,6 +171,15 @@ func TestRouterAPI(t *testing.T) {
 	})
 	router.DELETE("/DELETE", func(ctx *fasthttp.RequestCtx) {
 		delete = true
+	})
+	router.CONNECT("/CONNECT", func(ctx *fasthttp.RequestCtx) {
+		connect = true
+	})
+	router.OPTIONS("/OPTIONS", func(ctx *fasthttp.RequestCtx) {
+		options = true
+	})
+	router.TRACE("/TRACE", func(ctx *fasthttp.RequestCtx) {
+		trace = true
 	})
 	router.ANY("/ANY", func(ctx *fasthttp.RequestCtx) {
 		any = true
@@ -198,11 +204,6 @@ func TestRouterAPI(t *testing.T) {
 		t.Error("routing HEAD failed")
 	}
 
-	request(fasthttp.MethodOptions, "/OPTIONS")
-	if !options {
-		t.Error("routing OPTIONS failed")
-	}
-
 	request(fasthttp.MethodPost, "/POST")
 	if !post {
 		t.Error("routing POST failed")
@@ -221,6 +222,21 @@ func TestRouterAPI(t *testing.T) {
 	request(fasthttp.MethodDelete, "/DELETE")
 	if !delete {
 		t.Error("routing DELETE failed")
+	}
+
+	request(fasthttp.MethodConnect, "/CONNECT")
+	if !connect {
+		t.Error("routing CONNECT failed")
+	}
+
+	request(fasthttp.MethodOptions, "/OPTIONS")
+	if !options {
+		t.Error("routing OPTIONS failed")
+	}
+
+	request(fasthttp.MethodTrace, "/TRACE")
+	if !trace {
+		t.Error("routing TRACE failed")
 	}
 
 	request(fasthttp.MethodGet, "/Handler")
