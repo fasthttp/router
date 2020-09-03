@@ -33,6 +33,7 @@ var httpMethods = []string{
 	fasthttp.MethodOptions,
 	fasthttp.MethodTrace,
 	MethodWild,
+	"CUSTOM",
 }
 
 func randomHTTPMethod() string {
@@ -156,10 +157,10 @@ func TestRouterAPI(t *testing.T) {
 	router.GET("/GET", func(ctx *fasthttp.RequestCtx) {
 		get = true
 	})
-	router.HEAD("/GET", func(ctx *fasthttp.RequestCtx) {
+	router.HEAD("/HEAD", func(ctx *fasthttp.RequestCtx) {
 		head = true
 	})
-	router.OPTIONS("/GET", func(ctx *fasthttp.RequestCtx) {
+	router.OPTIONS("/OPTIONS", func(ctx *fasthttp.RequestCtx) {
 		options = true
 	})
 	router.POST("/POST", func(ctx *fasthttp.RequestCtx) {
@@ -192,12 +193,12 @@ func TestRouterAPI(t *testing.T) {
 		t.Error("routing GET failed")
 	}
 
-	request(fasthttp.MethodHead, "/GET")
+	request(fasthttp.MethodHead, "/HEAD")
 	if !head {
 		t.Error("routing HEAD failed")
 	}
 
-	request(fasthttp.MethodOptions, "/GET")
+	request(fasthttp.MethodOptions, "/OPTIONS")
 	if !options {
 		t.Error("routing OPTIONS failed")
 	}
@@ -335,7 +336,7 @@ func TestRouterMutable(t *testing.T) {
 
 	for method := range router.trees {
 		if !router.trees[method].Mutable {
-			t.Errorf("Method %s - Mutable == %v, want %v", method, router.trees[method].Mutable, true)
+			t.Errorf("Method %d - Mutable == %v, want %v", method, router.trees[method].Mutable, true)
 		}
 	}
 
@@ -1065,6 +1066,27 @@ func BenchmarkRouterANY(b *testing.B) {
 
 	ctx := new(fasthttp.RequestCtx)
 	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/")
+
+	for i := 0; i < b.N; i++ {
+		r.Handler(ctx)
+	}
+}
+
+func BenchmarkRouterGet_ANY(b *testing.B) {
+	resp := []byte("Bench GET")
+	respANY := []byte("Bench GET (ANY)")
+
+	r := New()
+	r.GET("/", func(ctx *fasthttp.RequestCtx) {
+		ctx.Success("text/plain", resp)
+	})
+	r.ANY("/", func(ctx *fasthttp.RequestCtx) {
+		ctx.Success("text/plain", respANY)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("UNICORN")
 	ctx.Request.SetRequestURI("/")
 
 	for i := 0; i < b.N; i++ {

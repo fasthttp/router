@@ -113,7 +113,8 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 		fn("/bar", func(_ *fasthttp.RequestCtx) {})
 	}
 
-	for _, method := range httpMethods {
+	methods := httpMethods[:len(httpMethods)-1] // Avoid customs methods
+	for _, method := range methods {
 		h, _ := r.Lookup(method, "/v1/bar", nil)
 		if h == nil {
 			t.Errorf("Bad shorcurt")

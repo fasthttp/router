@@ -8,9 +8,10 @@ import (
 // Router is a fasthttp.RequestHandler which can be used to dispatch requests to different
 // handler functions via configurable routes
 type Router struct {
-	trees           map[string]*radix.Tree
-	treeMutable     bool
-	registeredPaths map[string][]string
+	trees              []*radix.Tree
+	treeMutable        bool
+	customMethodsIndex map[string]int
+	registeredPaths    map[string][]string
 
 	// If enabled, adds the matched route path onto the ctx.UserValue context
 	// before invoking the handler.

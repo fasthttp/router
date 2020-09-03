@@ -26,7 +26,8 @@ var (
 // Path auto-correction, including trailing slashes, is enabled by default.
 func New() *Router {
 	return &Router{
-		trees:                  make(map[string]*radix.Tree),
+		trees:                  make([]*radix.Tree, 10),
+		customMethodsIndex:     make(map[string]int),
 		registeredPaths:        make(map[string][]string),
 		RedirectTrailingSlash:  true,
 		RedirectFixedPath:      true,
@@ -51,6 +52,37 @@ func (r *Router) saveMatchedRoutePath(path string, handler fasthttp.RequestHandl
 	}
 }
 
+func (r *Router) methodIndexOf(method string) int {
+	switch method {
+	case fasthttp.MethodGet:
+		return 0
+	case fasthttp.MethodHead:
+		return 1
+	case fasthttp.MethodPost:
+		return 2
+	case fasthttp.MethodPut:
+		return 3
+	case fasthttp.MethodPatch:
+		return 4
+	case fasthttp.MethodDelete:
+		return 5
+	case fasthttp.MethodConnect:
+		return 6
+	case fasthttp.MethodOptions:
+		return 7
+	case fasthttp.MethodTrace:
+		return 8
+	case MethodWild:
+		return 9
+	}
+
+	if i, ok := r.customMethodsIndex[method]; ok {
+		return i
+	}
+
+	return -1
+}
+
 // Mutable allows updating the route handler
 //
 // It's disabled by default
@@ -59,8 +91,12 @@ func (r *Router) saveMatchedRoutePath(path string, handler fasthttp.RequestHandl
 func (r *Router) Mutable(v bool) {
 	r.treeMutable = v
 
-	for method := range r.trees {
-		r.trees[method].Mutable = v
+	for i := range r.trees {
+		tree := r.trees[i]
+
+		if tree != nil {
+			tree.Mutable = v
+		}
 	}
 }
 
@@ -175,12 +211,22 @@ func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
 
 	r.registeredPaths[method] = append(r.registeredPaths[method], path)
 
-	tree := r.trees[method]
+	methodIndex := r.methodIndexOf(method)
+	if methodIndex == -1 {
+		tree := radix.New()
+		tree.Mutable = r.treeMutable
+
+		r.trees = append(r.trees, tree)
+		methodIndex = len(r.trees) - 1
+		r.customMethodsIndex[method] = methodIndex
+	}
+
+	tree := r.trees[methodIndex]
 	if tree == nil {
 		tree = radix.New()
 		tree.Mutable = r.treeMutable
 
-		r.trees[method] = tree
+		r.trees[methodIndex] = tree
 		r.globalAllowed = r.allowed("*", "")
 	}
 
@@ -206,14 +252,19 @@ func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
 // values. Otherwise the third return value indicates whether a redirection to
 // the same path with an extra / without the trailing slash should be performed.
 func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
-	if tree := r.trees[method]; tree != nil {
+	methodIndex := r.methodIndexOf(method)
+	if methodIndex == -1 {
+		return nil, false
+	}
+
+	if tree := r.trees[methodIndex]; tree != nil {
 		handler, tsr := tree.Get(path, ctx)
 		if handler != nil || tsr {
 			return handler, tsr
 		}
 	}
 
-	if tree := r.trees[MethodWild]; tree != nil {
+	if tree := r.trees[r.methodIndexOf(MethodWild)]; tree != nil {
 		return tree.Get(path, ctx)
 	}
 
@@ -243,13 +294,13 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 			return r.globalAllowed
 		}
 	} else { // specific path
-		for method := range r.trees {
+		for method := range r.registeredPaths {
 			// Skip the requested method - we already tried this one
 			if method == reqMethod || method == fasthttp.MethodOptions {
 				continue
 			}
 
-			handle, _ := r.trees[method].Get(path, nil)
+			handle, _ := r.trees[r.methodIndexOf(method)].Get(path, nil)
 			if handle != nil {
 				// Add request method to list of allowed methods
 				allowed = append(allowed, method)
@@ -342,20 +393,23 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 
 	path := gotils.B2S(ctx.Request.URI().Path())
 	method := gotils.B2S(ctx.Request.Header.Method())
+	methodIndex := r.methodIndexOf(method)
 
-	if tree := r.trees[method]; tree != nil {
-		if handler, tsr := tree.Get(path, ctx); handler != nil {
-			handler(ctx)
-			return
-		} else if method != fasthttp.MethodConnect && path != "/" {
-			if ok := r.tryRedirect(ctx, tree, tsr, method, path); ok {
+	if methodIndex > -1 {
+		if tree := r.trees[methodIndex]; tree != nil {
+			if handler, tsr := tree.Get(path, ctx); handler != nil {
+				handler(ctx)
 				return
+			} else if method != fasthttp.MethodConnect && path != "/" {
+				if ok := r.tryRedirect(ctx, tree, tsr, method, path); ok {
+					return
+				}
 			}
 		}
 	}
 
 	// Try to search in the wild method tree
-	if tree := r.trees[MethodWild]; tree != nil {
+	if tree := r.trees[r.methodIndexOf(MethodWild)]; tree != nil {
 		if handler, tsr := tree.Get(path, ctx); handler != nil {
 			handler(ctx)
 			return
