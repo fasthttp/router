@@ -530,10 +530,13 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	router.Handle(method, "/static/{filepath:*}", handlerFunc)
 
 	// Moved Permanently, request with GET method
-	codeRedirect := fasthttp.StatusMovedPermanently
-	if method != fasthttp.MethodGet {
+	expectedCode := fasthttp.StatusMovedPermanently
+	if method == fasthttp.MethodConnect {
+		// CONNECT method does not allow redirects, so Not Found (404)
+		expectedCode = fasthttp.StatusNotFound
+	} else if method != fasthttp.MethodGet {
 		// Permanent Redirect, request with same method
-		codeRedirect = fasthttp.StatusPermanentRedirect
+		expectedCode = fasthttp.StatusPermanentRedirect
 	}
 
 	type testRoute struct {
@@ -543,24 +546,24 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	}
 
 	testRoutes := []testRoute{
-		{"", fasthttp.StatusOK, ""},            // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/../path", fasthttp.StatusOK, ""},    // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
-		{"/nope", fasthttp.StatusNotFound, ""}, // NotFound
+		{"", fasthttp.StatusOK, ""},                              // TSR +/ (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/../path", expectedCode, buildLocation(host, "/path")}, // CleanPath (Not clean by router, this path is cleaned by fasthttp `ctx.Path()`)
+		{"/nope", fasthttp.StatusNotFound, ""},                   // NotFound
 	}
 
 	if method != fasthttp.MethodConnect {
 		testRoutes = append(testRoutes, []testRoute{
-			{"/path/", codeRedirect, buildLocation(host, "/path")},                                   // TSR -/
-			{"/dir", codeRedirect, buildLocation(host, "/dir/")},                                     // TSR +/
-			{"/PATH", codeRedirect, buildLocation(host, "/path")},                                    // Fixed Case
-			{"/DIR/", codeRedirect, buildLocation(host, "/dir/")},                                    // Fixed Case
-			{"/PATH/", codeRedirect, buildLocation(host, "/path")},                                   // Fixed Case -/
-			{"/DIR", codeRedirect, buildLocation(host, "/dir/")},                                     // Fixed Case +/
-			{"/paTh/?name=foo", codeRedirect, buildLocation(host, "/path?name=foo")},                 // Fixed Case With Query Params +/
-			{"/paTh?name=foo", codeRedirect, buildLocation(host, "/path?name=foo")},                  // Fixed Case With Query Params +/
-			{"/sergio/status/", codeRedirect, buildLocation(host, "/sergio/StaTus")},                 // Fixed Case With Params -/
-			{"/users/atreugo/eNtriEs", codeRedirect, buildLocation(host, "/USERS/atreugo/enTRies/")}, // Fixed Case With Params +/
-			{"/STatiC/test.go", codeRedirect, buildLocation(host, "/static/test.go")},                // Fixed Case Wildcard
+			{"/path/", expectedCode, buildLocation(host, "/path")},                                   // TSR -/
+			{"/dir", expectedCode, buildLocation(host, "/dir/")},                                     // TSR +/
+			{"/PATH", expectedCode, buildLocation(host, "/path")},                                    // Fixed Case
+			{"/DIR/", expectedCode, buildLocation(host, "/dir/")},                                    // Fixed Case
+			{"/PATH/", expectedCode, buildLocation(host, "/path")},                                   // Fixed Case -/
+			{"/DIR", expectedCode, buildLocation(host, "/dir/")},                                     // Fixed Case +/
+			{"/paTh/?name=foo", expectedCode, buildLocation(host, "/path?name=foo")},                 // Fixed Case With Query Params +/
+			{"/paTh?name=foo", expectedCode, buildLocation(host, "/path?name=foo")},                  // Fixed Case With Query Params +/
+			{"/sergio/status/", expectedCode, buildLocation(host, "/sergio/StaTus")},                 // Fixed Case With Params -/
+			{"/users/atreugo/eNtriEs", expectedCode, buildLocation(host, "/USERS/atreugo/enTRies/")}, // Fixed Case With Params +/
+			{"/STatiC/test.go", expectedCode, buildLocation(host, "/static/test.go")},                // Fixed Case Wildcard
 		}...)
 	}
 

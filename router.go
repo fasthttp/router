@@ -360,6 +360,8 @@ func (r *Router) tryRedirect(ctx *fasthttp.RequestCtx, tree *radix.Tree, tsr boo
 
 	// Try to fix the request path
 	if r.RedirectFixedPath {
+		path := gotils.B2S(ctx.Request.URI().Path())
+
 		uri := bytebufferpool.Get()
 		found := tree.FindCaseInsensitivePath(
 			cleanPath(path),
@@ -391,7 +393,7 @@ func (r *Router) Handler(ctx *fasthttp.RequestCtx) {
 		defer r.recv(ctx)
 	}
 
-	path := gotils.B2S(ctx.Request.URI().Path())
+	path := gotils.B2S(ctx.Request.URI().PathOriginal())
 	method := gotils.B2S(ctx.Request.Header.Method())
 	methodIndex := r.methodIndexOf(method)
 
