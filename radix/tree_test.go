@@ -5,13 +5,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/savsgio/gotils"
+	"github.com/savsgio/gotils/bytes"
 	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
 
 func generateHandler() fasthttp.RequestHandler {
-	hex := gotils.RandBytes(make([]byte, 10))
+	hex := bytes.Rand(make([]byte, 10))
 
 	return func(ctx *fasthttp.RequestCtx) {
 		ctx.Write(hex)
@@ -303,7 +303,7 @@ func Benchmark_Get(b *testing.B) {
 
 	// for i := 0; i < 3000; i++ {
 	// 	tree.Add(
-	// 		fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 15))), handler,
+	// 		fmt.Sprintf("/%s", bytes.Rand(make([]byte, 15))), handler,
 	// 	)
 	// }
 

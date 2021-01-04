@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/savsgio/gotils"
+	"github.com/savsgio/gotils/strings"
 	"github.com/valyala/fasthttp"
 )
 
@@ -147,7 +147,7 @@ func TestGetOptionalPath(t *testing.T) {
 		}
 
 		for _, wantPath := range test.optionalPaths {
-			if !gotils.StringSliceInclude(optionalPaths, wantPath) {
+			if !strings.Include(optionalPaths, wantPath) {
 				t.Errorf("The optional path is not returned for '%s': %s", test.path, wantPath)
 			}
 		}

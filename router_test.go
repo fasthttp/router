@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/savsgio/gotils"
+	gbytes "github.com/savsgio/gotils/bytes"
 	"github.com/valyala/fasthttp"
 )
 
@@ -665,7 +665,7 @@ func TestRouterNotFound_MethodWild(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		router.Handle(
 			randomHTTPMethod(),
-			fmt.Sprintf("/%s", gotils.RandBytes(make([]byte, 5))),
+			fmt.Sprintf("/%s", gbytes.Rand(make([]byte, 5))),
 			func(ctx *fasthttp.RequestCtx) {},
 		)
 	}

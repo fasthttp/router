@@ -1,6 +1,8 @@
 package router
 
-import "github.com/savsgio/gotils"
+import (
+	"github.com/savsgio/gotils/strings"
+)
 
 // cleanPath removes the '.' if it is the last character of the route
 func cleanPath(path string) string {
@@ -75,7 +77,7 @@ walk:
 					// include the root slash because the param is in the first segment
 					paths = append(paths, "/")
 
-				} else if !gotils.StringSliceInclude(paths, path[:start-2]) {
+				} else if !strings.Include(paths, path[:start-2]) {
 					// include the path without the wildcard
 					// -2 due to remove the '/' and '{'
 					paths = append(paths, path[:start-2])

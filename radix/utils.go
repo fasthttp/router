@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/savsgio/gotils"
+	"github.com/savsgio/gotils/strconv"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -172,5 +172,5 @@ func findWildPath(path string, fullPath string) *wildPath {
 }
 
 func copyString(a string) string {
-	return string(gotils.S2B(a))
+	return string(strconv.S2B(a))
 }
