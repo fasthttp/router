@@ -392,7 +392,12 @@ walk:
 
 		if n.wildcard != nil {
 			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
+				if path == "/" {
+					ctx.SetUserValue(n.wildcard.paramKey, "")
+				} else {
+					ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
+
+				}
 			}
 
 			return n.wildcard.handler, false
