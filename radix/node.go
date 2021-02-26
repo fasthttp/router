@@ -315,11 +315,7 @@ walk:
 						return child.handler, false
 					case child.wildcard != nil:
 						if ctx != nil {
-							if path == "/" {
-								ctx.SetUserValue(child.wildcard.paramKey, "")
-							} else {
-								ctx.SetUserValue(child.wildcard.paramKey, copyString(path))
-							}
+							ctx.SetUserValue(child.wildcard.paramKey, "")
 						}
 
 						return child.wildcard.handler, false
@@ -392,12 +388,7 @@ walk:
 
 		if n.wildcard != nil {
 			if ctx != nil {
-				if path == "/" {
-					ctx.SetUserValue(n.wildcard.paramKey, "")
-				} else {
-					ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
-
-				}
+				ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
 			}
 
 			return n.wildcard.handler, false
