@@ -238,7 +238,7 @@ func Test_TreeRootWildcard(t *testing.T) {
 	tree.Add("/{filepath:*}", handler)
 
 	testHandlerAndParams(t, tree, "/", handler, false, map[string]interface{}{
-		"filepath": "/",
+		"filepath": "",
 	})
 }
 
