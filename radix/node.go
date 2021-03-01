@@ -315,7 +315,7 @@ walk:
 						return child.handler, false
 					case child.wildcard != nil:
 						if ctx != nil {
-							ctx.SetUserValue(child.wildcard.paramKey, copyString(path))
+							ctx.SetUserValue(child.wildcard.paramKey, "")
 						}
 
 						return child.wildcard.handler, false

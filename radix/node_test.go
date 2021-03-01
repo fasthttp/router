@@ -173,7 +173,7 @@ func TestTreeWildcard(t *testing.T) {
 		{"/cmd/test/", false, "/cmd/{tool}/", map[string]interface{}{"tool": "test"}},
 		{"/cmd/test", true, "", nil},
 		{"/cmd/test/3", false, "/cmd/{tool}/{sub}", map[string]interface{}{"tool": "test", "sub": "3"}},
-		{"/src/", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "/"}},
+		{"/src/", false, "/src/{filepath:*}", map[string]interface{}{"filepath": ""}},
 		{"/src/some/file.png", false, "/src/{filepath:*}", map[string]interface{}{"filepath": "some/file.png"}},
 		{"/search/", false, "/search/", nil},
 		{"/search/someth!ng+in+ünìcodé", false, "/search/{query}", map[string]interface{}{"query": "someth!ng+in+ünìcodé"}},
