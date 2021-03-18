@@ -74,8 +74,6 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 			return nil, false
 		}
 
-		path = path[len(t.root.path):]
-
 		return t.root.getFromChild(path, ctx)
 
 	} else if path == t.root.path {
