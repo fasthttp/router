@@ -427,7 +427,11 @@ func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {
 			return true, true
 		}
 
-		return n.handler != nil, false
+		if n.handler != nil {
+			return true, false
+		} else {
+			bufferRemoveString(buf, n.path)
+		}
 	}
 
 	return false, false
@@ -467,7 +471,9 @@ func (n *node) findFromChild(path string, buf *bytebufferpool.ByteBuffer) (bool,
 					return true, true
 				}
 
-				return child.handler != nil, false
+				if child.handler != nil {
+					return true, false
+				}
 			}
 
 			bufferRemoveString(buf, path[:end])
