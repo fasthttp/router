@@ -79,7 +79,9 @@ func (t *Tree) Get(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandl
 		handler, tsr := t.root.getFromChild(path, ctx)
 		if handler == nil {
 			if t.root.wildcard != nil {
-				ctx.SetUserValue(t.root.wildcard.paramKey, path)
+				if ctx != nil {
+					ctx.SetUserValue(t.root.wildcard.paramKey, path)
+				}
 				return t.root.wildcard.handler, false
 			}
 		}

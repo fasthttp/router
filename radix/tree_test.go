@@ -240,6 +240,11 @@ func Test_TreeRootWildcard(t *testing.T) {
 	testHandlerAndParams(t, tree, "/", handler, false, map[string]interface{}{
 		"filepath": "",
 	})
+
+	tree.Add("/hello/{a}/{b}/{c}", handler)
+	testHandlerAndParams(t, tree, "/hello/a", handler, false, map[string]interface{}{
+		"filepath": "hello/a",
+	})
 }
 
 func Test_TreeNilHandler(t *testing.T) {
