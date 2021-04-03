@@ -1151,3 +1151,28 @@ func BenchmarkRouterRedirectTrailingSlash(b *testing.B) {
 		r.Handler(ctx)
 	}
 }
+
+func Benchmark_Get(b *testing.B) {
+	handler := func(ctx *fasthttp.RequestCtx) {}
+
+	r := New()
+
+	r.GET("/", handler)
+	r.GET("/plaintext", handler)
+	r.GET("/json", handler)
+	r.GET("/fortune", handler)
+	r.GET("/fortune-quick", handler)
+	r.GET("/db", handler)
+	r.GET("/queries", handler)
+	r.GET("/update", handler)
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/update")
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Handler(ctx)
+	}
+}

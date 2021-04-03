@@ -228,7 +228,6 @@ func Test_AddWithParam(t *testing.T) {
 
 	// Not found
 	testHandlerAndParams(t, tree, "/api/prefixV1_1111_sufix/fake", nil, false, nil)
-
 }
 
 func Test_TreeRootWildcard(t *testing.T) {

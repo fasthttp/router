@@ -274,128 +274,97 @@ func (n *node) add(path, fullPath string, handler fasthttp.RequestHandler) (*nod
 }
 
 func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
-	var parent *node
+	for _, child := range n.children {
+		switch child.nType {
+		case static:
 
-	parentIndex, childIndex := 0, 0
+			// Checks if the first byte is equal
+			// It's faster than compare strings
+			if path[0] != child.path[0] {
+				continue
+			}
 
-walk:
-	for {
-		for _, child := range n.children[childIndex:] {
-			childIndex++
-
-			switch child.nType {
-			case static:
-
-				// Checks if the first byte is equal
-				// It's faster than compare strings
-				if path[0] != child.path[0] {
+			if len(path) > len(child.path) {
+				if path[:len(child.path)] != child.path {
 					continue
 				}
 
-				if len(path) > len(child.path) {
-					if path[:len(child.path)] != child.path {
-						continue
+				h, tsr := child.getFromChild(path[len(child.path):], ctx)
+				if h != nil || tsr {
+					return h, tsr
+				}
+			} else if path == child.path {
+				switch {
+				case child.tsr:
+					return nil, true
+				case child.handler != nil:
+					return child.handler, false
+				case child.wildcard != nil:
+					if ctx != nil {
+						ctx.SetUserValue(child.wildcard.paramKey, "")
 					}
 
-					path = path[len(child.path):]
-
-					parent = n
-					n = child
-
-					parentIndex = childIndex
-					childIndex = 0
-
-					continue walk
-
-				} else if path == child.path {
-					switch {
-					case child.tsr:
-						return nil, true
-					case child.handler != nil:
-						return child.handler, false
-					case child.wildcard != nil:
-						if ctx != nil {
-							ctx.SetUserValue(child.wildcard.paramKey, "")
-						}
-
-						return child.wildcard.handler, false
-					}
-
-					return nil, false
+					return child.wildcard.handler, false
 				}
 
-			case param:
-				end := segmentEndIndex(path, false)
-				values := []string{copyString(path[:end])}
+				return nil, false
+			}
 
-				if child.paramRegex != nil {
-					end, values = child.findEndIndexAndValues(path[:end])
-					if end == -1 {
-						continue
-					}
+		case param:
+			end := segmentEndIndex(path, false)
+			values := []string{copyString(path[:end])}
+
+			if child.paramRegex != nil {
+				end, values = child.findEndIndexAndValues(path[:end])
+				if end == -1 {
+					continue
 				}
+			}
 
-				if len(path) > end {
-					h, tsr := child.getFromChild(path[end:], ctx)
-					if tsr {
-						return nil, tsr
-					} else if h != nil {
-						if ctx != nil {
-							for i, key := range child.paramKeys {
-								ctx.SetUserValue(key, values[i])
-							}
-						}
-
-						return h, false
-					}
-
-				} else if len(path) == end {
-					switch {
-					case child.tsr:
-						return nil, true
-					case child.handler == nil:
-						// try another child
-						continue
-					case ctx != nil:
+			if len(path) > end {
+				h, tsr := child.getFromChild(path[end:], ctx)
+				if tsr {
+					return nil, tsr
+				} else if h != nil {
+					if ctx != nil {
 						for i, key := range child.paramKeys {
 							ctx.SetUserValue(key, values[i])
 						}
 					}
 
-					return child.handler, false
+					return h, false
 				}
 
-			default:
-				panic("invalid node type")
+			} else if len(path) == end {
+				switch {
+				case child.tsr:
+					return nil, true
+				case child.handler == nil:
+					// try another child
+					continue
+				case ctx != nil:
+					for i, key := range child.paramKeys {
+						ctx.SetUserValue(key, values[i])
+					}
+				}
+
+				return child.handler, false
 			}
 
+		default:
+			panic("invalid node type")
 		}
-
-		// Go back and continue with the remaining children of the parent
-		// to try to discover the correct child node
-		// if the parent has a child node of type param
-		//
-		// See: https://github.com/fasthttp/router/issues/37
-		if parent != nil && parent.hasWildChild && len(parent.children[parentIndex:]) > 0 {
-			path = n.path + path
-			childIndex = parentIndex
-
-			n = parent
-			parent = nil
-
-			continue walk
-		}
-
-		if n.wildcard != nil {
-			if ctx != nil {
-				ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
-			}
-
-			return n.wildcard.handler, false
-		}
-
-		return nil, false
 	}
+
+	if n.wildcard != nil {
+		if ctx != nil {
+			ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
+		}
+
+		return n.wildcard.handler, false
+	}
+
+	return nil, false
 }
 
 func (n *node) find(path string, buf *bytebufferpool.ByteBuffer) (bool, bool) {

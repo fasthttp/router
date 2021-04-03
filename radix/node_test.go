@@ -117,6 +117,7 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/α",
 		"/β",
 		"/hello/test",
+		"/hello/tooth",
 		"/hello/{name}",
 	}
 
@@ -137,7 +138,8 @@ func TestTreeAddAndGet(t *testing.T) {
 		{"/α", false, "/α", nil},
 		{"/β", false, "/β", nil},
 		{"/hello/test", false, "/hello/test", nil},
-		{"/hello/test1", false, "/hello/{name}", map[string]interface{}{"name": "test1"}},
+		{"/hello/tooth", false, "/hello/tooth", nil},
+		{"/hello/testastretta", false, "/hello/{name}", map[string]interface{}{"name": "testastretta"}},
 		{"/hello/tes", false, "/hello/{name}", map[string]interface{}{"name": "tes"}},
 		{"/hello/test/bye", true, "", nil},
 	})
