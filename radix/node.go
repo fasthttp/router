@@ -95,7 +95,7 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 			continue
 		}
 
-		values[i] = path[index[j-1]:index[j]]
+		values[i] = copyString(path[index[j-1]:index[j]])
 
 		i++
 	}
