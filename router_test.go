@@ -288,6 +288,38 @@ func TestRouterInvalidInput(t *testing.T) {
 	}
 }
 
+func TestRouterRegexUserValues(t *testing.T) {
+	mux := New()
+	mux.GET("/metrics", func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	v4 := mux.Group("/v4")
+	id := v4.Group("/{id:^[1-9]\\d*}")
+	id.GET("/click", func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	ctx := new(fasthttp.RequestCtx)
+	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.SetRequestURI("/v4/123/click")
+	mux.Handler(ctx)
+
+	v1 := ctx.UserValue("id")
+	if v1 != "123" {
+		t.Fatalf(`expected "123" in user value, got %q`, v1)
+	}
+
+	ctx.Request.Reset()
+	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.SetRequestURI("/metrics")
+	mux.Handler(ctx)
+
+	if v1 != "123" {
+		t.Fatalf(`expected "123" in user value after second call, got %q`, v1)
+	}
+}
+
 func TestRouterChaining(t *testing.T) {
 	router1 := New()
 	router2 := New()
