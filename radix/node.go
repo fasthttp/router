@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	gstrings "github.com/savsgio/gotils/strings"
 	"github.com/valyala/bytebufferpool"
 	"github.com/valyala/fasthttp"
 )
@@ -95,7 +96,7 @@ func (n *node) findEndIndexAndValues(path string) (int, []string) {
 			continue
 		}
 
-		values[i] = copyString(path[index[j-1]:index[j]])
+		values[i] = gstrings.Copy(path[index[j-1]:index[j]])
 
 		i++
 	}
@@ -312,7 +313,7 @@ func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.Req
 
 		case param:
 			end := segmentEndIndex(path, false)
-			values := []string{copyString(path[:end])}
+			values := []string{gstrings.Copy(path[:end])}
 
 			if child.paramRegex != nil {
 				end, values = child.findEndIndexAndValues(path[:end])
@@ -358,7 +359,7 @@ func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.Req
 
 	if n.wildcard != nil {
 		if ctx != nil {
-			ctx.SetUserValue(n.wildcard.paramKey, copyString(path))
+			ctx.SetUserValue(n.wildcard.paramKey, gstrings.Copy(path))
 		}
 
 		return n.wildcard.handler, false

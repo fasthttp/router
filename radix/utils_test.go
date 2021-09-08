@@ -188,13 +188,3 @@ func Test_findWildPathConflict(t *testing.T) {
 		}
 	}
 }
-
-func Test_copyString(t *testing.T) {
-	s := "some string"
-
-	result := copyString(s)
-
-	if result != s {
-		t.Errorf("copyString() == %s, want %s", result, s)
-	}
-}
