@@ -18,10 +18,10 @@ type radixError struct {
 	params []interface{}
 }
 
-func (err *radixError) Error() string {
+func (err radixError) Error() string {
 	return fmt.Sprintf(err.msg, err.params...)
 }
 
-func newRadixError(msg string, params ...interface{}) *radixError {
-	return &radixError{msg, params}
+func newRadixError(msg string, params ...interface{}) radixError {
+	return radixError{msg, params}
 }

@@ -1,6 +1,7 @@
 package radix
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/valyala/bytebufferpool"
@@ -39,8 +40,9 @@ func (t *Tree) Add(path string, handler fasthttp.RequestHandler) {
 
 	n, err := t.root.add(path, fullPath, handler)
 	if err != nil {
-		radixErr := err.(*radixError)
-		if t.Mutable && !n.tsr {
+		var radixErr radixError
+
+		if errors.As(err, &radixErr) && t.Mutable && !n.tsr {
 			switch radixErr.msg {
 			case errSetHandler:
 				n.handler = handler
