@@ -259,8 +259,8 @@ func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
 
 // Lookup allows the manual lookup of a method + path combo.
 // This is e.g. useful to build a framework around this router.
-// If the path was found, it returns the handler function and the path parameter
-// values. Otherwise the third return value indicates whether a redirection to
+// If the path was found, it returns the handler function.
+// Otherwise the second return value indicates whether a redirection to
 // the same path with an extra / without the trailing slash should be performed.
 func (r *Router) Lookup(method, path string, ctx *fasthttp.RequestCtx) (fasthttp.RequestHandler, bool) {
 	methodIndex := r.methodIndexOf(method)
