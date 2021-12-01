@@ -39,10 +39,21 @@ func New() *Router {
 
 // Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
-func (r *Router) Group(path string) *Group {
+// Currently only one group middleware can be provided.
+func (r *Router) Group(path string, middleware ...RequestHandlerFunc) *Group {
+	var handler RequestHandlerFunc
+	if len(middleware) > 1 {
+		// This could be improved to support chained middlewares in the future
+		panic("only one group middleware is supported")
+	}
+	if len(middleware) > 0 {
+		handler = middleware[0]
+	}
+
 	return &Group{
-		router: r,
-		prefix: path,
+		router:  r,
+		prefix:  path,
+		handler: handler,
 	}
 }
 
@@ -161,30 +172,37 @@ func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
 // ServeFiles serves files from the given file system root.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
+// Currently only one group middleware can be provided.
 // For example if root is "/etc" and {filepath:*} is "passwd", the local file
 // "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore fasthttp.NotFound is used instead
 // Use:
 //     router.ServeFiles("/src/{filepath:*}", "./")
-func (r *Router) ServeFiles(path string, rootPath string) {
+func (r *Router) ServeFiles(path string, rootPath string, middleware ...RequestHandlerFunc) {
 	r.ServeFilesCustom(path, &fasthttp.FS{
 		Root:               rootPath,
 		IndexNames:         []string{"index.html"},
 		GenerateIndexPages: true,
 		AcceptByteRange:    true,
-	})
+	}, middleware...)
 }
 
 // ServeFilesCustom serves files from the given file system settings.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
+// Currently only one group middleware can be provided.
 // For example if root is "/etc" and {filepath:*} is "passwd", the local file
 // "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // of the Router's NotFound handler.
 // Use:
 //     router.ServeFilesCustom("/src/{filepath:*}", *customFS)
-func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
+func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS, middleware ...RequestHandlerFunc) {
+	if len(middleware) > 1 {
+		// This could be improved to support chained middlewares in the future
+		panic("only one file server middleware is supported")
+	}
+
 	suffix := "/{filepath:*}"
 
 	if !strings.HasSuffix(path, suffix) {
@@ -197,9 +215,13 @@ func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	if fs.PathRewrite == nil && stripSlashes > 0 {
 		fs.PathRewrite = fasthttp.NewPathSlashesStripper(stripSlashes)
 	}
-	fileHandler := fs.NewRequestHandler()
+	handler := fs.NewRequestHandler()
 
-	r.GET(path, fileHandler)
+	if len(middleware) > 0 {
+		handler = middleware[0](handler)
+	}
+
+	r.GET(path, handler)
 }
 
 // Handle registers a new request handler with the given path and method.

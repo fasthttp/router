@@ -134,3 +134,36 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupMiddleware(t *testing.T) {
+	r := New()
+
+	middlewareCalled := false
+	methodCalled := false
+
+	g := r.Group("/v1", func(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+		return func(ctx *fasthttp.RequestCtx) {
+			middlewareCalled = true
+			next(ctx)
+		}
+	})
+
+	g.GET("/test", func(ctx *fasthttp.RequestCtx) {
+		methodCalled = true
+	})
+
+	handle, _ := r.Lookup(fasthttp.MethodGet, "/v1/test", nil)
+	if handle == nil {
+		t.Error("Bad shorcurt")
+		return
+	}
+
+	handle(nil)
+
+	if !middlewareCalled {
+		t.Error("Middleware was not called")
+	}
+	if !methodCalled {
+		t.Error("Method was not called")
+	}
+}

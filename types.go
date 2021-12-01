@@ -77,8 +77,12 @@ type Router struct {
 	globalAllowed string
 }
 
+// RequestHandlerFunc is an adapter to allow to use it as wrapper for fasthttp.RequestHandler
+type RequestHandlerFunc func(h fasthttp.RequestHandler) fasthttp.RequestHandler
+
 // Group is a sub-router to group paths
 type Group struct {
-	router *Router
-	prefix string
+	router  *Router
+	handler RequestHandlerFunc
+	prefix  string
 }
