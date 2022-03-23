@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	gbytes "github.com/savsgio/gotils/bytes"
 	"github.com/valyala/fasthttp"
 )
 
@@ -625,7 +624,9 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	for _, tr := range testRoutes {
 		if runtime.GOOS == "windows" && strings.HasPrefix(tr.route, "/../") {
 			// See: https://github.com/valyala/fasthttp/issues/1226
-			t.Logf("skipping route %s on %s, unsupported yet", tr.route, runtime.GOOS)
+			t.Logf("skipping route '%s %s' on %s, unsupported yet", reqMethod, tr.route, runtime.GOOS)
+
+			continue
 		}
 
 		ctx := new(fasthttp.RequestCtx)
@@ -704,7 +705,7 @@ func TestRouterNotFound_MethodWild(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		router.Handle(
 			randomHTTPMethod(),
-			fmt.Sprintf("/%s", gbytes.Rand(make([]byte, 5))),
+			fmt.Sprintf("/%d", rand.Int63()),
 			func(ctx *fasthttp.RequestCtx) {},
 		)
 	}
