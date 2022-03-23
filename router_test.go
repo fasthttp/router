@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -621,6 +623,11 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	}
 
 	for _, tr := range testRoutes {
+		if runtime.GOOS == "windows" && strings.HasPrefix(tr.route, "/../") {
+			// See: https://github.com/valyala/fasthttp/issues/1226
+			t.Logf("skipping route %s on %s, unsupported yet", tr.route, runtime.GOOS)
+		}
+
 		ctx := new(fasthttp.RequestCtx)
 
 		ctx.Request.Header.SetMethod(reqMethod)
