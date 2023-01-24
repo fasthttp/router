@@ -81,7 +81,7 @@ func (n *node) split(i int) {
 
 func (n *node) findEndIndexAndValues(path string) (int, []string) {
 	index := n.paramRegex.FindStringSubmatchIndex(path)
-	if len(index) == 0 {
+	if len(index) == 0 || index[0] != 0 {
 		return -1, nil
 	}
 

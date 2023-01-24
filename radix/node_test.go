@@ -119,6 +119,8 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/hello/test",
 		"/hello/tooth",
 		"/hello/{name}",
+		"/regex/{c1:big_alt|alt|small_alt}/{rest:*}",
+		"/regex/{path:*}",
 	}
 
 	for _, route := range routes {
@@ -142,6 +144,8 @@ func TestTreeAddAndGet(t *testing.T) {
 		{"/hello/testastretta", false, "/hello/{name}", map[string]interface{}{"name": "testastretta"}},
 		{"/hello/tes", false, "/hello/{name}", map[string]interface{}{"name": "tes"}},
 		{"/hello/test/bye", true, "", nil},
+		{"/regex/more_alt/hello", false, "/regex/{path:*}", map[string]interface{}{"path": "more_alt/hello"}},
+		{"/regex/small_alt/hello", false, "/regex/{c1:big_alt|alt|small_alt}/{rest:*}", map[string]interface{}{"c1": "small_alt", "rest": "hello"}},
 	})
 }
 
