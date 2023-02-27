@@ -154,6 +154,28 @@ func Test_Tree(t *testing.T) {
 				},
 			},
 		},
+		{
+			args: args{
+				path:    "/data/orders",
+				reqPath: "/data/orders/",
+				handler: generateHandler(),
+			},
+			want: want{
+				tsr:    true,
+				params: nil,
+			},
+		},
+		{
+			args: args{
+				path:    "/data/",
+				reqPath: "/data",
+				handler: generateHandler(),
+			},
+			want: want{
+				tsr:    true,
+				params: nil,
+			},
+		},
 	}
 
 	tree := New()

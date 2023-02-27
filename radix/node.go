@@ -127,9 +127,14 @@ func (n *node) setHandler(handler fasthttp.RequestHandler, fullPath string) (*no
 	}
 
 	if n.path != "/" && !foundTSR {
-		childTSR := newNode("/")
-		childTSR.tsr = true
-		n.children = append(n.children, childTSR)
+		if strings.HasSuffix(n.path, "/") {
+			n.split(len(n.path) - 1)
+			n.tsr = true
+		} else {
+			childTSR := newNode("/")
+			childTSR.tsr = true
+			n.children = append(n.children, childTSR)
+		}
 	}
 
 	return n, nil
