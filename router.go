@@ -86,7 +86,7 @@ func (r *Router) methodIndexOf(method string) int {
 
 // Mutable allows updating the route handler
 //
-// It's disabled by default
+// # It's disabled by default
 //
 // WARNING: Use with care. It could generate unexpected behaviours
 func (r *Router) Mutable(v bool) {
@@ -165,7 +165,8 @@ func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
 // "/etc/passwd" would be served.
 // Internally a fasthttp.FSHandler is used, therefore fasthttp.NotFound is used instead
 // Use:
-//     router.ServeFiles("/src/{filepath:*}", "./")
+//
+//	router.ServeFiles("/src/{filepath:*}", "./")
 func (r *Router) ServeFiles(path string, rootPath string) {
 	r.ServeFilesCustom(path, &fasthttp.FS{
 		Root:               rootPath,
@@ -183,7 +184,8 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 // Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
 // of the Router's NotFound handler.
 // Use:
-//     router.ServeFilesCustom("/src/{filepath:*}", *customFS)
+//
+//	router.ServeFilesCustom("/src/{filepath:*}", *customFS)
 func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
 	suffix := "/{filepath:*}"
 
@@ -353,17 +355,15 @@ func (r *Router) tryRedirect(ctx *fasthttp.RequestCtx, tree *radix.Tree, tsr boo
 			uri.SetString(path[:len(path)-1])
 		} else {
 			uri.SetString(path)
-			uri.WriteString("/")
+			uri.WriteByte('/')
 		}
 
-		queryBuf := ctx.URI().QueryString()
-		if len(queryBuf) > 0 {
+		if queryBuf := ctx.URI().QueryString(); len(queryBuf) > 0 {
 			uri.WriteByte(questionMark)
 			uri.Write(queryBuf)
 		}
 
 		ctx.Redirect(uri.String(), code)
-
 		bytebufferpool.Put(uri)
 
 		return true
@@ -371,28 +371,28 @@ func (r *Router) tryRedirect(ctx *fasthttp.RequestCtx, tree *radix.Tree, tsr boo
 
 	// Try to fix the request path
 	if r.RedirectFixedPath {
-		path := strconv.B2S(ctx.Request.URI().Path())
+		path2 := strconv.B2S(ctx.Request.URI().Path())
 
 		uri := bytebufferpool.Get()
 		found := tree.FindCaseInsensitivePath(
-			cleanPath(path),
+			cleanPath(path2),
 			r.RedirectTrailingSlash,
 			uri,
 		)
 
 		if found {
-			queryBuf := ctx.URI().QueryString()
-			if len(queryBuf) > 0 {
+			if queryBuf := ctx.URI().QueryString(); len(queryBuf) > 0 {
 				uri.WriteByte(questionMark)
 				uri.Write(queryBuf)
 			}
 
-			ctx.RedirectBytes(uri.Bytes(), code)
-
+			ctx.Redirect(uri.String(), code)
 			bytebufferpool.Put(uri)
 
 			return true
 		}
+
+		bytebufferpool.Put(uri)
 	}
 
 	return false

@@ -578,12 +578,18 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	router.Handle(method, "/USERS/{name}/enTRies/", handlerFunc)
 	router.Handle(method, "/static/{filepath:*}", handlerFunc)
 
+	reqMethod := method
+	if method == MethodWild {
+		reqMethod = randomHTTPMethod()
+	}
+
 	// Moved Permanently, request with GET method
 	expectedCode := fasthttp.StatusMovedPermanently
-	if method == fasthttp.MethodConnect {
+	switch {
+	case reqMethod == fasthttp.MethodConnect:
 		// CONNECT method does not allow redirects, so Not Found (404)
 		expectedCode = fasthttp.StatusNotFound
-	} else if method != fasthttp.MethodGet {
+	case reqMethod != fasthttp.MethodGet:
 		// Permanent Redirect, request with same method
 		expectedCode = fasthttp.StatusPermanentRedirect
 	}
@@ -616,30 +622,29 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 		}...)
 	}
 
-	reqMethod := method
-	if method == MethodWild {
-		reqMethod = randomHTTPMethod()
-	}
-
 	for _, tr := range testRoutes {
-		if runtime.GOOS == "windows" && strings.HasPrefix(tr.route, "/../") {
-			// See: https://github.com/valyala/fasthttp/issues/1226
-			t.Logf("skipping route '%s %s' on %s, unsupported yet", reqMethod, tr.route, runtime.GOOS)
-
-			continue
-		}
-
 		ctx := new(fasthttp.RequestCtx)
-
 		ctx.Request.Header.SetMethod(reqMethod)
 		ctx.Request.SetRequestURI(tr.route)
 		ctx.Request.SetHost(host)
+
 		router.Handler(ctx)
 
 		statusCode := ctx.Response.StatusCode()
 		location := string(ctx.Response.Header.Peek("Location"))
+
 		if !(statusCode == tr.code && (statusCode == fasthttp.StatusNotFound || location == tr.location)) {
-			t.Errorf("NotFound handling route %s failed: ReqMethod=%s, Code=%d, Header=%v", method, tr.route, statusCode, location)
+			fn := t.Errorf
+			msg := "NotFound handling route '%s' failed: Method=%s, ReqMethod=%s, Code=%d, ExpectedCode=%d, Header=%v"
+
+			if runtime.GOOS == "windows" && strings.HasPrefix(tr.route, "/../") {
+				// See: https://github.com/valyala/fasthttp/issues/1226
+				// Not fail, because it is a known issue.
+				fn = t.Logf
+				msg = "ERROR: " + msg
+			}
+
+			fn(msg, tr.route, method, reqMethod, statusCode, tr.code, location)
 		}
 	}
 
@@ -655,9 +660,14 @@ func testRouterNotFoundByMethod(t *testing.T, method string) {
 	ctx.Request.Header.SetMethod(reqMethod)
 	ctx.Request.SetRequestURI("/nope")
 	router.Handler(ctx)
+
 	if !(ctx.Response.StatusCode() == fasthttp.StatusNotFound && notFound == true) {
-		t.Errorf("Custom NotFound handler failed: Code=%d, Header=%v", ctx.Response.StatusCode(), ctx.Response.Header.String())
+		t.Errorf(
+			"Custom NotFound handling failed: Method=%s, ReqMethod=%s, Code=%d, Header=%v",
+			method, reqMethod, ctx.Response.StatusCode(), ctx.Response.Header.String(),
+		)
 	}
+
 	ctx.Response.Reset()
 }
 
