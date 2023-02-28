@@ -5,51 +5,75 @@ import "github.com/valyala/fasthttp"
 // Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (g *Group) Group(path string) *Group {
+	validatePath(path)
+
+	if len(g.prefix) > 0 && path == "/" {
+		return g
+	}
+
 	return g.router.Group(g.prefix + path)
 }
 
 // GET is a shortcut for group.Handle(fasthttp.MethodGet, path, handler)
 func (g *Group) GET(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.GET(g.prefix+path, handler)
 }
 
 // HEAD is a shortcut for group.Handle(fasthttp.MethodHead, path, handler)
 func (g *Group) HEAD(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.HEAD(g.prefix+path, handler)
 }
 
 // POST is a shortcut for group.Handle(fasthttp.MethodPost, path, handler)
 func (g *Group) POST(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.POST(g.prefix+path, handler)
 }
 
 // PUT is a shortcut for group.Handle(fasthttp.MethodPut, path, handler)
 func (g *Group) PUT(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.PUT(g.prefix+path, handler)
 }
 
 // PATCH is a shortcut for group.Handle(fasthttp.MethodPatch, path, handler)
 func (g *Group) PATCH(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.PATCH(g.prefix+path, handler)
 }
 
 // DELETE is a shortcut for group.Handle(fasthttp.MethodDelete, path, handler)
 func (g *Group) DELETE(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.DELETE(g.prefix+path, handler)
 }
 
 // OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
 func (g *Group) CONNECT(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.CONNECT(g.prefix+path, handler)
 }
 
 // OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
 func (g *Group) OPTIONS(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.OPTIONS(g.prefix+path, handler)
 }
 
 // OPTIONS is a shortcut for group.Handle(fasthttp.MethodOptions, path, handler)
 func (g *Group) TRACE(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.TRACE(g.prefix+path, handler)
 }
 
@@ -57,6 +81,8 @@ func (g *Group) TRACE(path string, handler fasthttp.RequestHandler) {
 //
 // WARNING: Use only for routes where the request method is not important
 func (g *Group) ANY(path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.ANY(g.prefix+path, handler)
 }
 
@@ -70,6 +96,8 @@ func (g *Group) ANY(path string, handler fasthttp.RequestHandler) {
 //
 //	router.ServeFiles("/src/{filepath:*}", "./")
 func (g *Group) ServeFiles(path string, rootPath string) {
+	validatePath(path)
+
 	g.router.ServeFiles(g.prefix+path, rootPath)
 }
 
@@ -84,6 +112,8 @@ func (g *Group) ServeFiles(path string, rootPath string) {
 //
 //	router.ServeFilesCustom("/src/{filepath:*}", *customFS)
 func (g *Group) ServeFilesCustom(path string, fs *fasthttp.FS) {
+	validatePath(path)
+
 	g.router.ServeFilesCustom(g.prefix+path, fs)
 }
 
@@ -96,5 +126,7 @@ func (g *Group) ServeFilesCustom(path string, fs *fasthttp.FS) {
 // frequently used, non-standardized or custom methods (e.g. for internal
 // communication with a proxy).
 func (g *Group) Handle(method, path string, handler fasthttp.RequestHandler) {
+	validatePath(path)
+
 	g.router.Handle(method, g.prefix+path, handler)
 }

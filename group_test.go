@@ -2,11 +2,60 @@ package router
 
 import (
 	"bufio"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/valyala/fasthttp"
 )
+
+type routerGrouper interface {
+	Group(string) *Group
+	ServeFiles(path string, rootPath string)
+	ServeFilesCustom(path string, fs *fasthttp.FS)
+}
+
+func assertGroup(t *testing.T, gs ...routerGrouper) {
+	for i, g := range gs {
+		g2 := g.Group("/")
+
+		v1 := reflect.ValueOf(g)
+		v2 := reflect.ValueOf(g2)
+
+		if v1.String() != v2.String() { // router -> group
+			if v1.Pointer() == v2.Pointer() {
+				t.Errorf("[%d] equal pointers: %p == %p", i, g, g2)
+			}
+		} else { // group -> subgroup
+			if v1.Pointer() != v2.Pointer() {
+				t.Errorf("[%d] mismatch pointers: %p != %p", i, g, g2)
+			}
+		}
+
+		if err := catchPanic(func() { g.Group("v999") }); err == nil {
+			t.Error("an error was expected when a path does not begin with slash")
+		}
+
+		if err := catchPanic(func() { g.Group("/v999/") }); err == nil {
+			t.Error("an error was expected when a path has a trailing slash")
+		}
+
+		if err := catchPanic(func() { g.Group("") }); err == nil {
+			t.Error("an error was expected with an empty path")
+		}
+
+		if err := catchPanic(func() { g.ServeFiles("static/{filepath:*}", "./") }); err == nil {
+			t.Error("an error was expected when a path does not begin with slash")
+		}
+
+		if err := catchPanic(func() {
+			g.ServeFilesCustom("", &fasthttp.FS{Root: "./"})
+		}); err == nil {
+			t.Error("an error was expected with an empty path")
+		}
+
+	}
+}
 
 func TestGroup(t *testing.T) {
 	r1 := New()
@@ -15,6 +64,8 @@ func TestGroup(t *testing.T) {
 	r4 := r1.Group("/moo")
 	r5 := r4.Group("/foo")
 	r6 := r5.Group("/foo")
+
+	assertGroup(t, r1, r2, r3, r4, r5, r6)
 
 	hit := false
 
@@ -113,6 +164,14 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 
 	for _, fn := range shortcuts {
 		fn("/bar", func(_ *fasthttp.RequestCtx) {})
+
+		if err := catchPanic(func() { fn("buzz", func(_ *fasthttp.RequestCtx) {}) }); err == nil {
+			t.Error("an error was expected when a path does not begin with slash")
+		}
+
+		if err := catchPanic(func() { fn("", func(_ *fasthttp.RequestCtx) {}) }); err == nil {
+			t.Error("an error was expected with an empty path")
+		}
 	}
 
 	methods := httpMethods[:len(httpMethods)-1] // Avoid customs methods
@@ -127,6 +186,14 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 
 	for _, method := range httpMethods {
 		g2.Handle(method, "/bar", func(_ *fasthttp.RequestCtx) {})
+
+		if err := catchPanic(func() { g2.Handle(method, "buzz", func(_ *fasthttp.RequestCtx) {}) }); err == nil {
+			t.Error("an error was expected when a path does not begin with slash")
+		}
+
+		if err := catchPanic(func() { g2.Handle(method, "", func(_ *fasthttp.RequestCtx) {}) }); err == nil {
+			t.Error("an error was expected with an empty path")
+		}
 
 		h, _ := r.Lookup(method, "/v1/foo/bar", nil)
 		if h == nil {

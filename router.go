@@ -40,6 +40,12 @@ func New() *Router {
 // Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
 func (r *Router) Group(path string) *Group {
+	validatePath(path)
+
+	if path != "/" && strings.HasSuffix(path, "/") {
+		panic("group path must not end with a trailing slash")
+	}
+
 	return &Group{
 		router: r,
 		prefix: path,
@@ -216,10 +222,10 @@ func (r *Router) Handle(method, path string, handler fasthttp.RequestHandler) {
 	switch {
 	case len(method) == 0:
 		panic("method must not be empty")
-	case len(path) < 1 || path[0] != '/':
-		panic("path must begin with '/' in path '" + path + "'")
 	case handler == nil:
 		panic("handler must not be nil")
+	default:
+		validatePath(path)
 	}
 
 	r.registeredPaths[method] = append(r.registeredPaths[method], path)
