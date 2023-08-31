@@ -79,6 +79,7 @@ type Router struct {
 
 // Group is a sub-router to group paths
 type Group struct {
-	router *Router
-	prefix string
+	router     *Router
+	prefix     string
+	middleware []func(fasthttp.RequestHandler) fasthttp.RequestHandler
 }
