@@ -133,6 +133,7 @@ func (g *Group) Handle(method, path string, handler fasthttp.RequestHandler) {
 	g.router.Handle(method, g.prefix+path, handler)
 }
 
+// AddMiddleware You SHOULD add middleware before register routes in Group
 func (g *Group) AddMiddleware(h func(fasthttp.RequestHandler) fasthttp.RequestHandler) {
 	g.middleware = append(g.middleware, h)
 }
