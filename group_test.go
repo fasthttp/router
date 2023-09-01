@@ -201,3 +201,84 @@ func TestGroup_shortcutsAndHandle(t *testing.T) {
 		}
 	}
 }
+
+func TestGroup_AddMiddleware(t *testing.T) {
+	m1 := func(rq fasthttp.RequestHandler) fasthttp.RequestHandler {
+		return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
+			rq(ctx)
+			ctx.Response.Header.Add("middleware1", "1")
+		})
+	}
+
+	m2 := func(rq fasthttp.RequestHandler) fasthttp.RequestHandler {
+		return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
+			rq(ctx)
+			ctx.Response.Header.Add("middleware2", "2")
+		})
+	}
+
+	r := New()
+
+	v1 := r.Group("/v1")
+	v2 := r.Group("/v2")
+	v3 := r.Group("/v3")
+
+	v1.AddMiddleware(m1)
+	v2.AddMiddleware(m2)
+
+	v3.AddMiddleware(m1)
+	v3.AddMiddleware(m2)
+
+	v1.GET("/foo", func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	v2.POST("/foo", func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	v3.PUT("/foo", func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	})
+
+	assertWithTestServer(t, "GET /v1/foo HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
+		br := bufio.NewReader(&rw.w)
+		var resp fasthttp.Response
+		if err := resp.Read(br); err != nil {
+			t.Fatalf("Unexpected error when reading response: %s", err)
+		}
+		if string(resp.Header.Peek("middleware1")) != "1" {
+			t.Errorf("Group Middleware1.")
+			t.FailNow()
+		}
+	})
+
+	assertWithTestServer(t, "POST /v2/foo HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
+		br := bufio.NewReader(&rw.w)
+		var resp fasthttp.Response
+		if err := resp.Read(br); err != nil {
+			t.Fatalf("Unexpected error when reading response: %s", err)
+		}
+		if string(resp.Header.Peek("middleware2")) != "2" {
+			t.Errorf("Group Middleware2. Header not set")
+			t.FailNow()
+		}
+	})
+
+	assertWithTestServer(t, "PUT /v3/foo HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
+		br := bufio.NewReader(&rw.w)
+		var resp fasthttp.Response
+		if err := resp.Read(br); err != nil {
+			t.Fatalf("Unexpected error when reading response: %s", err)
+		}
+		if string(resp.Header.Peek("middleware1")) != "1" {
+			t.Errorf("Group Middleware1.")
+			t.FailNow()
+		}
+
+		if string(resp.Header.Peek("middleware2")) != "2" {
+			t.Errorf("Group Middleware2.")
+			t.FailNow()
+		}
+	})
+}
