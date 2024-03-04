@@ -1,6 +1,6 @@
 module github.com/fasthttp/router
 
-go 1.18
+go 1.19
 
 require (
 	github.com/savsgio/gotils v0.0.0-20240303185622-093b76447511
