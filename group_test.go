@@ -94,6 +94,7 @@ func TestGroup(t *testing.T) {
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	})
 	r6.ServeFiles("/static/{filepath:*}", "./")
+	r6.ServeFS("/static/fs/{filepath:*}", fsTestFilesystem)
 	r6.ServeFilesCustom("/custom/static/{filepath:*}", &fasthttp.FS{Root: "./"})
 
 	uris := []string{
@@ -110,6 +111,8 @@ func TestGroup(t *testing.T) {
 		"POST /moo/foo/foo/bar HTTP/1.1\r\n\r\n",
 		// testing multiple sub-router group - r6 (grouped from r5) to serve files
 		"GET /moo/foo/foo/static/router.go HTTP/1.1\r\n\r\n",
+		// testing multiple sub-router group - r6 (grouped from r5) to serve fs
+		"GET /moo/foo/foo/static/fs/LICENSE HTTP/1.1\r\n\r\n",
 		// testing multiple sub-router group - r6 (grouped from r5) to serve files with custom settings
 		"GET /moo/foo/foo/custom/static/router.go HTTP/1.1\r\n\r\n",
 	}

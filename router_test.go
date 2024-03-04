@@ -3,6 +3,7 @@ package router
 import (
 	"bufio"
 	"bytes"
+	"embed"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -36,6 +37,9 @@ var httpMethods = []string{
 	MethodWild,
 	"CUSTOM",
 }
+
+//go:embed LICENSE
+var fsTestFilesystem embed.FS
 
 func randomHTTPMethod() string {
 	method := httpMethods[rand.Intn(len(httpMethods)-1)]
@@ -934,12 +938,47 @@ func TestRouterServeFiles(t *testing.T) {
 	if recv == nil {
 		t.Fatal("registering path not ending with '{filepath:*}' did not panic")
 	}
+
 	body := []byte("fake ico")
-	ioutil.WriteFile(os.TempDir()+"/favicon.ico", body, 0644)
+	if err := os.WriteFile(os.TempDir()+"/favicon.ico", body, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	r.ServeFiles("/{filepath:*}", os.TempDir())
 
 	assertWithTestServer(t, "GET /favicon.ico HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
+		br := bufio.NewReader(&rw.w)
+		var resp fasthttp.Response
+		if err := resp.Read(br); err != nil {
+			t.Fatalf("Unexpected error when reading response: %s", err)
+		}
+		if resp.Header.StatusCode() != 200 {
+			t.Fatalf("Unexpected status code %d. Expected %d", resp.Header.StatusCode(), 200)
+		}
+		if !bytes.Equal(resp.Body(), body) {
+			t.Fatalf("Unexpected body %q. Expected %q", resp.Body(), string(body))
+		}
+	})
+}
+
+func TestRouterServeFS(t *testing.T) {
+	r := New()
+
+	recv := catchPanic(func() {
+		r.ServeFS("/noFilepath", fsTestFilesystem)
+	})
+	if recv == nil {
+		t.Fatal("registering path not ending with '{filepath:*}' did not panic")
+	}
+
+	body, err := os.ReadFile("LICENSE")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r.ServeFS("/{filepath:*}", fsTestFilesystem)
+
+	assertWithTestServer(t, "GET /LICENSE HTTP/1.1\r\n\r\n", r.Handler, func(rw *readWriter) {
 		br := bufio.NewReader(&rw.w)
 		var resp fasthttp.Response
 		if err := resp.Read(br); err != nil {

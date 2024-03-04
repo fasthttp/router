@@ -1,6 +1,10 @@
 package router
 
-import "github.com/valyala/fasthttp"
+import (
+	"io/fs"
+
+	"github.com/valyala/fasthttp"
+)
 
 // Group returns a new group.
 // Path auto-correction, including trailing slashes, is enabled by default.
@@ -86,7 +90,7 @@ func (g *Group) ANY(path string, handler fasthttp.RequestHandler) {
 	g.router.ANY(g.prefix+path, handler)
 }
 
-// ServeFiles serves files from the given file system root.
+// ServeFiles serves files from the given file system root path.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
 // For example if root is "/etc" and {filepath:*} is "passwd", the local file
@@ -99,6 +103,21 @@ func (g *Group) ServeFiles(path string, rootPath string) {
 	validatePath(path)
 
 	g.router.ServeFiles(g.prefix+path, rootPath)
+}
+
+// ServeFS serves files from the given file system.
+// The path must end with "/{filepath:*}", files are then served from the local
+// path /defined/root/dir/{filepath:*}.
+// For example if root is "/etc" and {filepath:*} is "passwd", the local file
+// "/etc/passwd" would be served.
+// Internally a fasthttp.FSHandler is used, therefore http.NotFound is used instead
+// Use:
+//
+//	router.ServeFS("/src/{filepath:*}", myFilesystem)
+func (g *Group) ServeFS(path string, filesystem fs.FS) {
+	validatePath(path)
+
+	g.router.ServeFS(g.prefix+path, filesystem)
 }
 
 // ServeFilesCustom serves files from the given file system settings.

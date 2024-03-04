@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/fasthttp/router/radix"
@@ -15,8 +16,7 @@ import (
 const MethodWild = "*"
 
 var (
-	defaultContentType = []byte("text/plain; charset=utf-8")
-	questionMark       = byte('?')
+	questionMark = byte('?')
 
 	// MatchedRoutePathParam is the param name under which the path of the matched
 	// route is stored, if Router.SaveMatchedRoutePath is set.
@@ -164,7 +164,7 @@ func (r *Router) ANY(path string, handler fasthttp.RequestHandler) {
 	r.Handle(MethodWild, path, handler)
 }
 
-// ServeFiles serves files from the given file system root.
+// ServeFiles serves files from the given file system root path.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
 // For example if root is "/etc" and {filepath:*} is "passwd", the local file
@@ -182,6 +182,27 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 	})
 }
 
+// ServeFS serves files from the given file system.
+// The path must end with "/{filepath:*}", files are then served from the local
+// path /defined/root/dir/{filepath:*}.
+// For example if root is "/etc" and {filepath:*} is "passwd", the local file
+// "/etc/passwd" would be served.
+// Internally a fasthttp.FSHandler is used, therefore fasthttp.NotFound is used instead
+// Use:
+//
+//	router.ServeFS("/src/{filepath:*}", myFilesystem)
+func (r *Router) ServeFS(path string, filesystem fs.FS) {
+	r.ServeFilesCustom(path, &fasthttp.FS{
+		FS:                 filesystem,
+		Root:               "",
+		AllowEmptyRoot:     true,
+		GenerateIndexPages: true,
+		AcceptByteRange:    true,
+		Compress:           true,
+		CompressBrotli:     true,
+	})
+}
+
 // ServeFilesCustom serves files from the given file system settings.
 // The path must end with "/{filepath:*}", files are then served from the local
 // path /defined/root/dir/{filepath:*}.
@@ -193,7 +214,7 @@ func (r *Router) ServeFiles(path string, rootPath string) {
 //
 //	router.ServeFilesCustom("/src/{filepath:*}", *customFS)
 func (r *Router) ServeFilesCustom(path string, fs *fasthttp.FS) {
-	suffix := "/{filepath:*}"
+	const suffix = "/{filepath:*}"
 
 	if !strings.HasSuffix(path, suffix) {
 		panic("path must end with " + suffix + " in path '" + path + "'")
