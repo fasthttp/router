@@ -10,14 +10,15 @@ A trivial example is:
      "log"
 
      "github.com/fasthttp/router"
+     "github.com/valyala/fasthttp"
  )
 
  func Index(ctx *fasthttp.RequestCtx) {
-     fmt.Fprint(w, "Welcome!\n")
+     ctx.WriteString("Welcome!")
  }
 
  func Hello(ctx *fasthttp.RequestCtx) {
-     fmt.Fprintf(w, "hello, %s!\n", ctx.UserValue("name"))
+     fmt.Fprintf(ctx, "Hello, %s!\n", ctx.UserValue("name"))
  }
 
  func main() {
