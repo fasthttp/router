@@ -300,20 +300,34 @@ func (n *node) getFromChild(path string, ctx *fasthttp.RequestCtx) (fasthttp.Req
 					return h, tsr
 				}
 			} else if path == child.path {
-				switch {
-				case child.tsr:
-					return nil, true
-				case child.handler != nil:
+				// Child matches exactly. Check if child has a direct handler or wildcard
+				// before falling back to parent's wildcard or TSR.
+				if child.handler != nil {
 					return child.handler, false
-				case child.wildcard != nil:
+				}
+				if child.wildcard != nil {
 					if ctx != nil {
 						ctx.SetUserValue(child.wildcard.paramKey, "")
 					}
-
 					return child.wildcard.handler, false
 				}
 
-				return nil, false
+				// Child has no handler and no wildcard - check if parent has a wildcard
+				// that should take precedence over the auto-generated TSR.
+				if n.wildcard != nil {
+					if ctx != nil {
+						ctx.SetUserValue(n.wildcard.paramKey, gstrings.Copy(""))
+					}
+					return n.wildcard.handler, false
+				}
+
+				// No parent wildcard, honor the trailing-slash redirect.
+				if child.tsr {
+					return nil, true
+				}
+
+				// Try other children.
+				continue
 			}
 
 		case param:
