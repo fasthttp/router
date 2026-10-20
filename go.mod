@@ -1,8 +1,6 @@
 module github.com/fasthttp/router
 
-go 1.21
-
-toolchain go1.23.4
+go 1.24
 
 require (
 	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38
@@ -12,5 +10,5 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.1.1 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 )
